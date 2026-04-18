@@ -143,15 +143,37 @@ system: agent tokens grant access to one or more visibility labels.
 
 Built-in labels:
 
-- `personal` — private to the user and in-app tools.
-- `work` — professional context. Typical default for work agents.
 - `public` — content the user is comfortable sharing broadly.
+- `work` — professional context. Typical default for work agents.
+- `personal` — non-work life context the user treats as private to
+  themselves and in-app tools, but is willing to share with
+  appropriately-scoped agents.
+- `private` — **hard floor.** Never included in a grant unless the
+  grant explicitly names `private`. The desktop app shows a distinct
+  warning when a user approves a scope that includes `private`. This
+  is the label for notes the user never wants to leak by accident
+  (health, finances, therapy, relationships).
 
 Users may define any additional label (e.g. `medical`, `finance`).
 Labels are free-form strings matching `^[a-z][a-z0-9-]*$`.
 
 A document has exactly one `visibility`. If finer-grained sharing is
 needed, split the document.
+
+### 5.1 The `private` floor
+
+Implementations must enforce these rules for any document whose
+`visibility` is `private`:
+
+- A token's scope must contain the literal string `private` for the
+  document to be visible. No substring or pattern match.
+- Out-of-scope `private` documents are indistinguishable from
+  non-existent ones in all error responses (same `not_authorized`
+  error, same listing behavior).
+- The desktop app surfaces any grant that includes `private` with a
+  distinct visual warning at approval time and in the token list.
+- User-defined labels do not inherit the hard-floor rule — only the
+  built-in `private` label does.
 
 ---
 

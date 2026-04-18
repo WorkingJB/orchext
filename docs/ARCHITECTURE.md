@@ -133,19 +133,39 @@ Two trust tiers for writes:
 doesn't require opening the external write surface to every agent the
 user ever connects.
 
-### 3.4 Cloud tier: end-to-end encrypted relay
+### 3.4 Cloud tier: session-bound decryption for always-on integrations
 
-Cloud storage and the hosted MCP relay never see plaintext.
+Cloud storage is end-to-end encrypted at rest. The master key never
+leaves user devices. To keep hosted agent integrations always-on
+without requiring the desktop to be running, the cloud tier uses
+**session-bound decryption**:
 
 - Master key derived from the user's passphrase via Argon2id
-  (tuned to ~500 ms on a mid-range laptop).
+  (tuned to ~500 ms on a mid-range laptop). Device-only.
 - Files encrypted client-side (libsodium `secretstream` or age) before
-  upload. Server sees opaque blobs plus minimal metadata.
+  upload. At rest the server sees opaque blobs plus minimal metadata.
+- While any user device is online and unlocked, it publishes a
+  short-lived **session key** to the cloud, derived from the master
+  key and TTL-bound (default: sliding 24h window, refreshed
+  automatically while a device is active).
+- The relay uses the session key to decrypt on demand and serve agent
+  integrations server-side. This is the default integration path for
+  cloud-tier users.
+- When every device has been offline past the TTL, session keys
+  expire and the cloud falls back to opaque blobs. Agents see a
+  locked state until a device comes back online.
+- Revocation: removing a device or manual "lock cloud" action
+  expires the session key immediately.
 - Web UI decrypts in-browser via WASM; the server never holds the
-  passphrase or the derived key.
+  passphrase or the master key.
 - Recovery = a one-time recovery code generated at setup, printable.
-  Optional Shamir split across trusted contacts for users who want it.
-  No server-side recovery.
+  Optional Shamir split across trusted contacts. No server-side
+  recovery.
+
+**Trust claim.** Mytex cloud can decrypt context only during a session
+that a user device authorized. Strict no-cloud-decryption is an opt-in
+mode for users who prefer it; their integrations fall back to
+relay-to-device (agent sees locked state when desktop is offline).
 
 **UX:** modelled on Bitwarden / 1Password. Passphrase once per
 session, cached in the OS keychain, biometric unlock after that.
@@ -267,11 +287,15 @@ The cloud tier is open source too; the paid value is running it.
 - Each agent connection has its own opaque token.
 - Server stores only a hash.
 - Tokens carry: scope (which `visibility` labels it can read), mode
-  (read or read+propose), expiry, and a human-readable label
+  (read or read+propose), expiry, retrieval limits (max documents
+  and max tokens per request), and a human-readable label
   ("Claude — work laptop").
 - One-click revoke. Last-used timestamp visible in the UI.
 - Tokens never appear in logs or audit entries; the audit refers to
   token IDs.
+- The token service is designed to accept an OAuth 2.1 path
+  (PKCE, audience-bound tokens, protected-resource metadata) for
+  the cloud-relay milestone. v1 local ships with opaque tokens only.
 
 ### 5.3 Scope evaluation
 
@@ -285,7 +309,15 @@ allowed = token.mode covers request.action
 ```
 
 Scope is the atom of permission. `visibility` values in v1:
-`personal`, `work`, `public`, plus any custom labels the user creates.
+`public`, `work`, `personal`, `private`, plus any custom labels the
+user creates.
+
+`private` is a **hard floor**: a token's scope must name `private`
+explicitly to access any `private`-labelled document. The UI shows a
+distinct warning when a user approves a grant that includes `private`.
+Enumeration returns the same `not_authorized` error for
+out-of-scope, nonexistent, and `private`-without-grant cases, so the
+error cannot be used to detect `private` content.
 
 ### 5.4 Write surface
 
@@ -300,8 +332,18 @@ watching.
 Context documents are user-controlled but can contain text copied from
 untrusted sources. The core treats all document bodies as untrusted
 input when rendering to agents: no special escape sequences, no
-instruction-like phrasing is given elevated meaning. Agents are
-responsible for their own prompt hygiene; Mytex does not sanitize.
+instruction-like phrasing is given elevated meaning.
+
+Mytex attaches **provenance metadata** to every fragment it returns
+(`document_id`, `visibility`, `updated_at`, `source`) and marks the
+body as untrusted input. Agents can use that metadata to defend
+themselves. Mytex does **not** rewrite, strip, or re-label
+instruction-like content inside document bodies — sanitizing
+user-authored markdown is fragile and paternalistic.
+
+Retrieval-volume limits (max documents and max tokens per request,
+configured per token) are enforced server-side as a
+denial-of-exposure control.
 
 ### 5.6 Transport
 
@@ -374,10 +416,15 @@ In scope:
    memories, tools, preferences, domains, decisions (see
    `FORMAT.md`).
 3. Local MCP server with `context.search`, `context.get`,
-   `context.list`.
+   `context.list`. Compatibility targets: Claude Desktop (primary),
+   Cursor (guaranteed secondary — required pass in the v1 test matrix).
 4. Scoped token management UI and audit log viewer.
-5. Import from Obsidian vault.
-6. In-app onboarding agent flow.
+5. Per-document passive history UI (timeline, diff, restore). No
+   branches, no remotes — the product's job is to be simpler than
+   git, not to be a git client. Users remain free to run `git` on
+   the vault from outside the app.
+6. Import from Obsidian vault.
+7. In-app onboarding agent flow.
 
 Out of scope for v1:
 

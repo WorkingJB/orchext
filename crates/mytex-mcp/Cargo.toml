@@ -1,0 +1,22 @@
+[package]
+name = "mytex-mcp"
+description = "Mytex MCP server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "mytex-mcp"
+path = "src/main.rs"
+
+[dependencies]
+mytex-vault = { workspace = true }
+mytex-index = { workspace = true }
+mytex-auth = { workspace = true }
+mytex-audit = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

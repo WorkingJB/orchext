@@ -1,0 +1,25 @@
+[package]
+name = "mytex-auth"
+description = "Mytex token and permission service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+mytex-vault = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+argon2 = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+subtle = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -81,15 +81,17 @@ A token is an opaque string with the shape `mtx_<32+ random chars>`.
 The server stores only an Argon2id hash. Tokens carry, in the server's
 record:
 
-| Attribute   | Purpose                                                        |
-|-------------|----------------------------------------------------------------|
-| `label`     | Human-readable ("Claude — work laptop"). Shown in the UI.      |
-| `scope`     | Set of `visibility` labels this token may read. Non-empty.     |
-| `mode`      | `read` or `read+propose`. v1 effectively ignores `propose`.    |
-| `expires_at`| Required. Default 90 days. Max 365 days.                       |
-| `created_at`| Set by the server.                                             |
-| `last_used` | Updated on every successful request.                           |
-| `id`        | Short opaque token ID used in audit logs. Not the secret.      |
+| Attribute        | Purpose                                                        |
+|------------------|----------------------------------------------------------------|
+| `label`          | Human-readable ("Claude — work laptop"). Shown in the UI.      |
+| `scope`          | Set of `visibility` labels this token may read. Non-empty.     |
+| `mode`           | `read` or `read+propose`. v1 effectively ignores `propose`.    |
+| `expires_at`     | Required. Default 90 days. Max 365 days.                       |
+| `limits.max_docs`| Max documents returned per request. Default 20. Hard cap 100.  |
+| `limits.max_bytes`| Max total body bytes per request. Default 64 KiB. Hard cap 1 MiB. |
+| `created_at`     | Set by the server.                                             |
+| `last_used`      | Updated on every successful request.                           |
+| `id`             | Short opaque token ID used in audit logs. Not the secret.      |
 
 Tokens are revocable from the UI. A revoked token returns
 `-32001 / token_revoked` on next use.
@@ -106,6 +108,13 @@ token with `scope = ["work", "public"]`:
   so that scope cannot be used for enumeration.
 - A `scope` argument passed to a tool may only **narrow** the token's
   scope, never widen it.
+
+**The `private` floor.** A token's scope must contain the literal
+string `private` to access any `private`-labelled document. There is
+no implicit promotion. Out-of-scope `private` documents return the
+same `-32002 / not_authorized` error as any other out-of-scope
+document and are absent from all listings. The desktop UI warns the
+user distinctly when a grant including `private` is approved.
 
 ### 3.3 Principal
 
@@ -195,6 +204,15 @@ in-scope documents.
 first H1 in the body, or the `id` as a fallback. Full document
 retrieval is a separate `context.get` call, to keep `search`
 responses small.
+
+Every result carries **provenance**: `id`, `visibility`, `updated`,
+and (if set) `source` from the document's frontmatter. Agents should
+treat the `snippet` and any body text as untrusted input and use the
+provenance to decide how much weight to give it.
+
+Retrieval volume is capped by the token's `limits.max_docs` and
+`limits.max_bytes`. A `context.search` call that would exceed either
+sets `truncated: true` and returns only what fits.
 
 ### 5.2 `context.get`
 
@@ -430,6 +448,10 @@ The server returns the full list of supported tools via
   `resources/subscribe`.
 - Tools: `context.search`, `context.get`, `context.list`.
 - Stdio transport.
+- Compatibility targets: Claude Desktop (primary — polish, docs,
+  error messages written against it) and Cursor (guaranteed
+  secondary — required pass in the v1 test matrix, no UX
+  optimization).
 
 **v1.1**
 

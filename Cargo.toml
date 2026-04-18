@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mytex-vault",
+    "crates/mytex-index",
+    "crates/mytex-auth",
+    "crates/mytex-audit",
+    "crates/mytex-mcp",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.75"
+repository = "https://github.com/mytex-app/mytex"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["fs", "rt", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yml = "0.0.12"
+thiserror = "1"
+async-trait = "0.1"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
+argon2 = "0.5"
+rand = "0.8"
+base64 = "0.22"
+subtle = "2"
+
+mytex-vault = { path = "crates/mytex-vault", version = "0.1.0" }
+mytex-index = { path = "crates/mytex-index", version = "0.1.0" }
+mytex-auth = { path = "crates/mytex-auth", version = "0.1.0" }
+mytex-audit = { path = "crates/mytex-audit", version = "0.1.0" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
