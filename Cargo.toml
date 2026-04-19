@@ -30,6 +30,7 @@ argon2 = "0.5"
 rand = "0.8"
 base64 = "0.22"
 subtle = "2"
+rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
 
 mytex-vault = { path = "crates/mytex-vault", version = "0.1.0" }
 mytex-index = { path = "crates/mytex-index", version = "0.1.0" }
