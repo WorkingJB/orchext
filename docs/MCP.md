@@ -31,10 +31,10 @@ context as easily as it reads its own documentation.
 
 The same tool surface is exposed over two transports.
 
-| Transport   | Used by                        | Notes                                               |
+| Transport   | Used by                        | Status                                              |
 |-------------|--------------------------------|-----------------------------------------------------|
-| `stdio`     | Local agents on the same host. | Spawned as a child process by the agent.            |
-| `http+sse`  | Remote agents via cloud relay. | Authenticated tunnel; mTLS between desktop ↔ relay. |
+| `stdio`     | Local agents on the same host. | Ships in v1. Spawned as a child process.            |
+| `http+sse`  | Remote agents against a server.| Phase 2b. Served by `mytex-server` over TLS, OAuth 2.1 bearer auth. |
 
 In both cases the wire protocol is JSON-RPC 2.0 as defined by the
 MCP specification. Mytex does not extend or reinterpret the protocol;
@@ -290,7 +290,7 @@ Listing never returns bodies; it is a cheap index lookup. Agents
 should follow up with `context.get` for any document they need in
 full.
 
-### 5.4 `context.propose` *(specified, not shipped in v1)*
+### 5.4 `context.propose` *(specified; ships in Phase 2b)*
 
 Submit a change to a document for user review.
 
@@ -442,7 +442,7 @@ The server returns the full list of supported tools via
 
 ## 11. What's in v1 vs later
 
-**v1 (ships with the desktop app)**
+**v1 (ships with the desktop app, local stdio only)**
 
 - `initialize`, `tools/list`, `resources/list`, `resources/read`,
   `resources/subscribe`.
@@ -453,10 +453,27 @@ The server returns the full list of supported tools via
   secondary — required pass in the v1 test matrix, no UX
   optimization).
 
-**v1.1**
+**Phase 2b** (with `mytex-server`)
 
-- `context.propose` + proposal review UI.
-- HTTP+SSE transport via cloud relay.
+- HTTP+SSE transport mounted on `mytex-server`. Same JSON-RPC
+  surface. OAuth 2.1 bearer auth replaces opaque tokens for remote
+  callers; opaque tokens remain valid for local stdio.
+- `context.propose` lands. Proposals flow into the workspace's
+  proposal queue; desktop and web clients surface them for review.
+- Server-side session-bound decryption (ARCH §3.4, reconciled
+  Q3) — the server can answer MCP requests only while a client
+  device has published a session key.
+
+**Phase 2c** (teams)
+
+- All MCP calls on a team workspace are workspace-scoped by the
+  bearer token's audience. Resource URIs and tool results are
+  filtered by role-derived default scopes plus any per-token
+  narrowing.
+- New built-in visibility `org` enters scope negotiation. Like
+  `private`, it is a hard label.
+- `context.propose` is the member-writes-to-`org/*` path; admin
+  approval merges.
 
 **Later**
 

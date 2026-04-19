@@ -260,16 +260,38 @@ The primary agent surface. Tools exposed in v1:
 Transport: stdio for local agents, HTTP/SSE for remote agents via the
 cloud relay.
 
-### 4.6 Cloud sync + relay (paid tier)
+### 4.6 Mytex Server (Phase 2 — self-host or SaaS)
 
-- **Sync service** stores encrypted blobs keyed by vault ID and file ID.
-- **Relay service** forwards MCP/API calls from remote agents to the
-  user's desktop app over an authenticated tunnel, or to a user-run
-  lightweight decryptor instance when the desktop is offline.
-- **Web UI** is a static site that pulls encrypted blobs, decrypts in
-  the browser, and reuses most of the desktop UI components.
+A single axum service (`mytex-server`) runs three deployment shapes
+from one codebase (see `implementation-status.md` Phase 2 for the
+detailed plan):
 
-The cloud tier is open source too; the paid value is running it.
+- **Personal synced** — the user's desktop and web clients read/write
+  their own vault on the server.
+- **Team self-host** — a business runs `mytex-server` on their own
+  infra (published Docker image + reference `docker-compose.yml`).
+  Members connect from desktop or web.
+- **Team SaaS** — we operate the same image multi-tenant.
+
+Shared concerns:
+
+- **Storage.** Postgres for account/session/membership metadata and
+  opaque blobs. The vault format (markdown + YAML frontmatter) is
+  preserved; the server persists documents as encrypted blobs plus
+  search index.
+- **Decryption model.** Session-bound (per ARCH §3.4 and
+  `reconciled-v1-plan.md` Q3): the server can decrypt only while a
+  client device has published a short-lived session key. No client
+  online past the TTL → blobs go opaque, hosted agents see a locked
+  state.
+- **Web client.** A Vite/React app that reuses `apps/desktop/src/`
+  components and decrypts in-browser via a WASM-compiled
+  `mytex-crypto`.
+- **Agent access.** MCP over HTTP/SSE authenticated by OAuth 2.1
+  bearer tokens (D4). Opaque tokens remain for loopback / stdio.
+
+The entire server stack is open source; the commercial value is in
+running it.
 
 ---
 
@@ -390,19 +412,37 @@ claims are only credible because anyone can verify them.
 
 ---
 
-## 7. Designing now for teams later
+## 7. Workspaces, identity, and teams
 
-Two decisions keep the team path open without adding team complexity
-to v1:
+v1 ships a single local vault. Phase 2 (`implementation-status.md`)
+extends this along three axes without breaking the v1 contract:
+
+- **Workspaces (Phase 2a).** A user's desktop app holds N workspaces,
+  each with its own root, audit log, tokens, and index. A registry
+  at `~/.mytex/workspaces.json` tracks them and the active one. The
+  in-app switcher moves between them. No schema change to the vault.
+- **Account + memberships (Phase 2b+).** A Mytex account is a single
+  login (D8). A workspace can be local (today), remote-personal
+  (Phase 2b), or remote-team (Phase 2c). Workspaces are independent
+  — tokens, audit logs, and visibility labels do not cross.
+- **Teams (Phase 2c).** A team workspace is a remote workspace with
+  memberships. Three roles: `owner`, `admin`, `member` (D11). A seed
+  `org/` type with an `org:` visibility holds business context
+  (goals, tone, marketing stance) — admin-only write (D10); first
+  user of a new team is admin automatically. Members may
+  `context.propose` against `org/*`.
+
+Design invariants:
 
 - **Actor model.** Every document, token, and proposal has a
-  `principal` field. In v1 it is always the single user. A team is
-  just another principal with members, added later.
-- **Namespace.** Vault paths are already a tree. Teams become new
-  roots (`~/Mytex/personal/`, `~/Mytex/acme-team/`) with their own
-  keys and policies. No schema change required.
+  `principal` field. v1 always uses the single user. Teams add new
+  principals (team + members) without schema change.
+- **Per-document visibility, not per-document ACLs.** Team roles map
+  to default scope sets over `visibility` labels; no per-document
+  ACL table.
 
-v1 does **not** ship any org, team, or RBAC UI.
+v1 ships none of the Phase 2 UI or server. Nothing below the workspace
+registry boundary is network-aware today.
 
 ---
 
@@ -437,15 +477,39 @@ Out of scope for v1:
 
 ---
 
-## 9. Glossary
+## 9. Phase 2 roadmap
 
-- **Vault** — a user's root directory of context files.
-- **Document** — a single markdown file in the vault.
-- **Type** — a document's top-level category (`identity`, `goal`, …).
+Phase 2 is tracked in detail in `docs/implementation-status.md`. The
+short shape:
+
+| Phase | Delivers                                                | New crates                     |
+| ---   | ---                                                     | ---                            |
+| 2a    | Multi-vault desktop + workspace switcher                | —                              |
+| 2b    | `mytex-server` + remote driver + web client + sync      | `mytex-server`, `mytex-sync`, `mytex-crypto`, `apps/web` |
+| 2c    | Teams, memberships, `org/` context, roles               | —                              |
+
+Phase 2 decisions (D7–D12) are recorded in `implementation-status.md`
+and supersede anything in `reconciled-v1-plan.md` that conflicts.
+`reconciled-v1-plan.md` stays scoped to v1 (D1–D6).
+
+---
+
+## 10. Glossary
+
+- **Vault** — a directory of context files. One per workspace.
+- **Workspace** — a registered vault the client can switch to.
+  Personal (local) or team (remote) in Phase 2+.
+- **Account** — a Mytex login; may belong to N workspaces.
+- **Document** — a single markdown file in a vault.
+- **Type** — a document's top-level category (`identity`, `goal`,
+  …, `org` in Phase 2c).
 - **Visibility** — a label on a document used for permission scoping.
+  `org:` is added in Phase 2c.
 - **Token** — an opaque credential granting a specific agent a
-  specific scope.
-- **Principal** — the owner of a vault, token, or document. Always
-  the single user in v1.
+  specific scope within one workspace.
+- **Principal** — the owner of a vault, token, or document. The
+  single user in v1; a user or team in Phase 2+.
 - **Scope** — the set of `visibility` labels a token may read.
 - **Proposal** — an agent-submitted change awaiting user approval.
+- **Role** (Phase 2c) — `owner` / `admin` / `member` within a team
+  workspace. Roles translate to default scopes.

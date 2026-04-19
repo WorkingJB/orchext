@@ -15,7 +15,7 @@ we are without reading git history.
 
 **Toolchain:** Rust 1.95.0 stable (rustup). Workspace at repo root.
 
-**Test totals:** 88/88 passing.
+**Test totals:** 95/95 passing (+4 from new `workspaces::` tests in the desktop crate for Phase 2a).
 
 | Crate         | Status    | Unit | Integration | Notes                                  |
 |---------------|-----------|-----:|------------:|----------------------------------------|
@@ -24,7 +24,7 @@ we are without reading git history.
 | `mytex-auth`  | ✅ shipped | 11   | 9           | Opaque tokens + Argon2id + scopes      |
 | `mytex-index` | ✅ shipped | 4    | 6           | SQLite + FTS5; search / graph / filter |
 | `mytex-mcp`   | ✅ shipped | 11   | 22          | JSON-RPC + stdio; rate limit + fs watcher |
-| `mytex-desktop` | ✅ MVP   | —    | —           | Tauri 2 + React; vault / tokens / audit UI |
+| `mytex-desktop` | ✅ Phase 2a | 7  | —           | Multi-vault switcher + workspace registry |
 
 ---
 
@@ -360,24 +360,307 @@ crates directly — no subprocess to `mytex-mcp`.
 - **Build:** `npm run tauri build` — full `.app` / `.dmg` bundle.
   Not exercised yet; icon needs replacement first.
 
-**Known gaps (MVP cuts, not v1-scope violations):**
+**Follow-ons shipped since MVP (2026-04-19):**
 
-- **No fs watcher in the desktop.** `mytex-mcp` still watches and
-  notifies its own subscribers, but the desktop's doc list doesn't
-  refresh live when a file changes on disk. Refresh on tab-switch
-  is the workaround; wiring `notify` in the Tauri process is a
-  small follow-up.
-- **Graph view** (reconciled-v1-plan §v1 item 1) — explicitly cut
-  from the MVP; to be added when needed.
-- **Obsidian import** (§v1 item 5) — explicitly cut from the MVP.
-- **In-app onboarding agent** (§v1 item 6) — explicitly cut; needs
-  the Claude API integration work.
+- **Fs watcher wired** — `src-tauri/src/watch.rs` mirrors the
+  `mytex-mcp` pattern: notify watcher owns path→(type,id), calls
+  `index.upsert`/`remove`, emits Tauri event `vault://changed`.
+  `DocumentsView` and `GraphView` subscribe and auto-refresh. No
+  debouncing; bursts may trigger several events per logical write.
+- **Save indicator** — `DocEditor` flashes a transient "Saved ✓"
+  pill for ~1.8s on success and persists a red error banner on
+  failure. `role="status" aria-live="polite"` for assistive tech.
+- **Graph view** (reconciled-v1-plan §v1 item 1) — new `Graph`
+  nav tab. Backend: `graph_snapshot` Tauri command + a new
+  `Index::all_edges()` that pulls every `(source, target)` link
+  row in one SQL trip. Frontend: `react-force-graph-2d` canvas,
+  click-to-jump to Documents. Orphan edges (target not in vault)
+  are filtered out — this is a v1 simplification, not a bug.
+- **In-app onboarding agent** (§v1 item 6) — first-run screen
+  (auto-opened when `document_count == 0`, also a nav tab).
+  Chat UI backed by `onboarding_chat` / `onboarding_finalize`
+  Tauri commands that POST directly to Anthropic's `/v1/messages`
+  endpoint via `reqwest` (no Rust SDK exists). Model pinned to
+  `claude-haiku-4-5` for cost. Scope cuts: no streaming, no tool
+  use (agent returns a JSON array of seed docs in a finalize turn),
+  single-session only. API key stored in `.mytex/settings.json`
+  alongside `tokens.json` — plaintext at rest, same threat model
+  as the existing token file, move to OS keychain in a follow-up.
+
+**Known gaps remaining:**
+
+- **Obsidian import** (§v1 item 5) — explicitly cut from the MVP;
+  not started.
+- **API key in plaintext** — `.mytex/settings.json` is not
+  encrypted. Fine for local dev, but should move to
+  `tauri-plugin-stronghold` / OS keychain before any distribution
+  build.
+- **Fs watcher burst coalescing** — a single `echo >> file.md`
+  can emit 2–3 `vault://changed` events. Harmless (React just
+  re-fetches), but noisy; `notify-debouncer-mini` would smooth it.
+
+**Phase 2a shipped (2026-04-19): Multi-vault + workspace switcher**
+
+The desktop app now tracks N registered vaults and switches between
+them from the header. Unblocks use case 5 locally (personal ↔ any
+other local vault).
+
+- **Registry at `~/.mytex/workspaces.json`** — per-install client
+  state (not part of the vault format; see `FORMAT.md` §11.1). JSON
+  with `{version, active, workspaces:[{id, name, kind, path,
+  added_at}]}`. Atomic write via temp + rename. Workspace IDs are
+  `ws_` + base64url of 8 random bytes (matches `tok_` pattern).
+- **New Rust module:** `apps/desktop/src-tauri/src/workspaces.rs`
+  (Registry + WorkspaceEntry + helpers) with 4 unit tests
+  (empty-load, roundtrip, path-dedup, active-promotion on remove).
+- **State model:** `AppState { registry_path, registry: RwLock<Registry>,
+  open: RwLock<Option<OpenVault>> }`. Only the active workspace is
+  open at a time; switching drops the old `OpenVault` (and its
+  watcher) before opening the new one. Deliberate simplification:
+  keeping N warm would require N watchers + coordinating the fs-event
+  channel, and v1 vault sizes don't need it.
+- **New commands:** `workspace_list`, `workspace_add(path, name?)`,
+  `workspace_activate(id)`, `workspace_remove(id)`,
+  `workspace_rename(id, name)`. `vault_open` is gone; frontend
+  calls `workspace_add` instead.
+- **`vault_info()` now auto-opens** the active registered workspace
+  if present but not loaded. Returns `null` only on first run
+  (registry empty). Existing `doc_*` / `token_*` / `audit_*`
+  commands route through `active_services()`, which returns a clear
+  "no workspace open" error if called before any workspace is
+  registered.
+- **`VaultInfo` grew** `workspace_id` and `name` fields so the
+  frontend can key React children off the active workspace.
+- **UI:** new `WorkspaceSwitcher.tsx` dropdown in the header showing
+  active + list + "Add workspace…" + per-row Rename / Remove.
+  Remove on the last remaining workspace is refused at the UI layer
+  (the backend would simply leave an empty registry with no active).
+- **Re-mount on switch:** `Layout.tsx`'s `<main>` carries
+  `key={vault.workspace_id}`, so all child views (Documents, Graph,
+  Tokens, Audit, Onboarding) unmount + remount on switch and re-
+  fetch cleanly. Avoided threading a workspace prop through every
+  child; React keying is the lighter touch.
+- **Workspace isolation** is path-based (same as v1): each vault's
+  `.mytex/` holds its own tokens, audit, index, proposals, settings.
+  No cross-workspace data paths added.
+
+**Decisions recorded here:**
+
+- **Single-open, not multi-open.** As above; revisit only if
+  workspace count grows past ~10 or users ask for cross-vault search.
+- **Registry outside the vault, not inside.** Vault portability
+  wins. A vault dropped onto another machine registers as a new
+  workspace on that machine without rewriting anything inside it.
+- **No React Router.** Workspace is React state in `App.tsx`, not
+  a URL path segment. URL-based routing (`/w/:id/...`) was in the
+  Phase 2a plan but was cut — it adds a dependency and deep-link
+  semantics we don't yet need.
+- **Rename is admin-free.** Users can rename any registered
+  workspace from the switcher; no confirmation. Revisit if a
+  workspace name ever appears in audit logs or tokens (it doesn't
+  yet).
+
+**Known gaps after Phase 2a:**
+
+- **UI not exercised in a browser.** Code type-checks and
+  `vite build` succeeds; interactive smoke-test deferred to the
+  user or next session (Tauri dev needs the native shell).
+- **Fs watcher thrash on rapid switches.** Switching workspaces
+  tears down and recreates the watcher. Heavy clicking could
+  produce brief gaps where file changes on the previous workspace
+  would be missed; that workspace isn't active, so no user-visible
+  effect. The next reindex on reactivation catches up.
+- **No keyboard shortcut** for workspace switching yet.
+
+## Phase 2 — Multi-vault, server, teams (planning)
+
+> Status: **planning only.** No code yet. This section captures shape
+> and decisions so the next working session can pick up without
+> re-deriving context.
+
+### Goals — six use cases
+
+1. **Personal self-host.** Desktop app + local MCP (shipped today).
+2. **Personal synced.** One user, desktop + web client, context synced
+   between devices.
+3. **Team self-host.** Business customer runs `mytex-server` on their
+   own infra; team members connect from desktop or web. Shared
+   org-level context (marketing stance, goals, tone) alongside
+   each member's personal workspace.
+4. **Team SaaS.** Managed multi-tenant hosting of (3). Same artifact.
+5. **Account + N memberships.** A single account can belong to
+   personal + any number of teams; the client switches between
+   workspaces (Slack/Linear model).
+6. **Agent-led code updates.** Keep crates small and independently
+   testable; `implementation-status.md` is the durable handoff so
+   agents can pick up mid-stream.
+
+### Deployment matrix
+
+|              | Self-hosted                | Managed SaaS            |
+| ---          | ---                        | ---                     |
+| **Personal** | Desktop-only (today's v1)  | Desktop + web, synced   |
+| **Team**     | On-prem `mytex-server`     | Hosted tenant of same   |
+
+**Key claim:** one server artifact (`mytex-server`, axum) covers the
+three non-trivial cells. SaaS is "we operate it for you" — no code
+fork. Already promised by `ARCHITECTURE.md` §6.
+
+### Architectural decisions (Phase 2)
+
+**D7. Server packaging — Docker image + `docker-compose.yml`.**
+On-prem customers get a published image plus a reference compose file
+(server + Postgres + TLS-terminating reverse proxy). Lets them deploy
+without owning an OS or dependency stack. The SaaS tenant runs the
+same image. A signed standalone binary + systemd unit is possible
+later but not first.
+
+**D8. Identity — one account, N memberships.**
+A Mytex account is a single login that can belong to any number of
+workspaces (one personal + N teams). Client switches workspaces
+in-app. Per-workspace tokens, audit logs, scopes, and visibility
+labels stay isolated; an account is just the identity envelope.
+
+**D9. Sync / decryption — session-bound, default on.**
+`reconciled-v1-plan.md` Q3 cashes in. While any client is online and
+unlocked, the server holds a short-lived session key and decrypts
+server-side for hosted agents. When no client is online past the TTL,
+the server falls back to opaque blobs and hosted integrations see a
+locked state. Strict-E2EE opt-out available; those users' hosted
+agents fall back to relay-to-device.
+
+**D10. Org context — admin-write, first user is admin.**
+Team workspaces get a seed `org/` top-level type. Only admins/owners
+can write to `org/*`. The first user of a new team is made admin
+automatically. Members read `org/*` subject to visibility. Members
+with `read+propose` can submit `context.propose` patches for admin
+review — the long-deferred propose flow finally earns its keep.
+
+**D11. Team roles — three levels, mapped to scope.**
+`owner` (billing + member management + org write), `admin` (member
+management + org write), `member` (read + propose). Roles translate
+to default scope sets; per-workspace tokens may narrow further.
+No per-document ACLs.
+
+**D12. No CRDTs.** Server is source of truth in sync mode. Writes are
+version-checked against document hash (already computed by
+`mytex-vault`). Conflicts surface as last-write-wins with a UI prompt.
+Multi-device offline editing is a v3 concern.
+
+### Phases
+
+#### Phase 2a — Multi-vault desktop + workspace switcher
+
+No network yet. Teach the desktop that "vault" is plural.
+
+- Desktop state becomes `Workspaces { active: Id, vaults: Map<Id, OpenVault> }`.
+- Workspace registry at `~/.mytex/workspaces.json` (distinct from the
+  per-vault `.mytex/` inside each root).
+- Switcher UI (sidebar dropdown + keyboard command).
+- Frontend routes become `/w/:workspace/documents`, etc.
+- Per-workspace audit logs, tokens, indices — already isolated by
+  path, needs a registry that enumerates them.
+- Remote workspaces (Phase 2b) slot into the same switcher later.
+- **Crates touched:** `mytex-desktop` only.
+- **Unblocks:** use case 5 locally.
+- **Cuts:** no cross-workspace search; no "all workspaces" view.
+
+#### Phase 2b — Server + remote driver + sync
+
+The bulk of the work. One user, one remote workspace, end-to-end.
+
+- **New crate: `mytex-server`** (axum).
+  - HTTP surface mirrors `VaultDriver` + `Index` + `TokenService` +
+    `AuditWriter` operations over REST/JSON.
+  - OAuth 2.1 with PKCE, audience-bound tokens (D4 cashed in).
+  - Postgres for accounts, sessions, memberships, opaque blobs,
+    per-tenant audit.
+  - Session-key management (D9).
+  - `Dockerfile` + `docker-compose.yml` (D7).
+- **New crate: `mytex-crypto`** — libsodium/age wrappers for the Q3
+  key hierarchy: `passphrase → master key (device-only) → session
+  key (TTL-bound) → per-document keys`. WASM-compiled for web client.
+- **New crate: `mytex-sync`** — client library. Implements the
+  existing `VaultDriver` trait against a remote `mytex-server`, plus
+  a local-index-as-cache policy for offline reads. Server is
+  authoritative; local cache is best-effort.
+- **New app: `apps/web`** — Vite/React client, reuses components from
+  `apps/desktop/src/` where possible.
+- **`context.propose` ships** — deferred from v1.1, first-class here.
+- **Existing crates touched:**
+  - `mytex-auth` — OAuth 2.1 path alongside the existing opaque tokens.
+  - `mytex-mcp` — HTTP/SSE transport next to the existing stdio.
+  - `mytex-desktop` — "connect to server" workspace flow.
+  - `mytex-vault`, `mytex-index`, `mytex-audit` — no surface change;
+    they run on server or client.
+- **Unblocks:** use case 2. Also a power-user flavor of use case 1
+  (own server, own devices).
+
+#### Phase 2c — Teams and org context
+
+Multi-tenant on the same server, plus team semantics.
+
+- **Crates touched:**
+  - `mytex-server` — membership table, role middleware, workspace
+    routing (`/w/:id/...`), invite flow, first-user-is-admin (D10).
+  - `mytex-vault` — seed `org/` type directory, `org:` visibility
+    label.
+  - `mytex-auth` — workspace-aware tokens, role-derived default
+    scopes (D11).
+  - `mytex-desktop` + `apps/web` — team management UI (members,
+    invites, role change), org-context editor (admin), propose-to-org
+    (member).
+- **SaaS is just multi-tenant signups on the same image.**
+  On-prem is the same image inside the customer's firewall.
+- **Unblocks:** use cases 3 and 4.
+- **Cuts:** no billing integration (out of scope per user);
+  no SCIM/SAML (add if enterprise customers ask); no per-doc ACLs.
+
+### New crates / apps summary
+
+| Name            | Kind  | Phase | Role                                          |
+| ---             | ---   | ---   | ---                                           |
+| `mytex-server`  | crate | 2b    | Axum HTTP + Postgres + OAuth; Docker-packaged |
+| `mytex-crypto`  | crate | 2b    | Session-bound key hierarchy; WASM-compilable  |
+| `mytex-sync`    | crate | 2b    | Client-side `VaultDriver` over HTTPS          |
+| `apps/web`      | app   | 2b    | React web client (parallel to desktop)        |
+
+Phases 2a and 2c add no new crates — both extend existing ones.
+
+### Scope cuts (explicit)
+
+- No CRDTs (D12).
+- No mobile app, no browser extension.
+- No federation between self-hosted servers.
+- No per-document ACLs — reuse `visibility` + roles.
+- No billing in 2c (deferred).
+- No offline-first multi-device editing — online-first, version-checked.
+- No cross-workspace search in 2a.
+- No SSO/SCIM/SAML in 2c initial cut.
+
+### Open questions
+
+- **OAuth provider.** Run our own IdP for SaaS, integrate a hosted
+  auth (WorkOS / Clerk / Supabase Auth), or both? Self-host customers
+  will eventually want OIDC pluggability.
+- **DB toolchain.** `sqlx` (offline-checked queries, matches
+  `rusqlite` ergonomics) vs `sea-orm` / `diesel`. Lean: `sqlx`.
+- **Conflict UI.** Version-miss surfaces as inline diff + pick-a-side,
+  or re-open for manual merge?
+- **Web client tech.** Vite + React + Tailwind (mirror desktop for
+  component reuse) vs a meta-framework. Lean: match desktop.
+- **MCP transport for team workspaces.** Desktop users run local
+  `mytex-mcp` against the remote workspace (fast path), hosted
+  integrations hit the server's HTTP/SSE MCP directly. Likely both.
+- **Invite UX.** Email magic link, shareable join-code link, or both?
+
+---
 
 ## Out of scope / deferred
 
-- Cloud sync + session-bound decryption (cloud milestone, not v1).
-- `context.propose` write-back flow (v1.1).
-- HTTP API (v1.1).
+- Cloud sync + session-bound decryption — tracked in Phase 2 above.
+- `context.propose` write-back flow — tracked in Phase 2 above.
+- HTTP API — tracked in Phase 2 above.
 
 ---
 

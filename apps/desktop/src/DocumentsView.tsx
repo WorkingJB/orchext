@@ -9,15 +9,31 @@ import {
 
 export function DocumentsView({
   onMutated,
+  initialSelectedId,
+  onSelectionConsumed,
 }: {
   onMutated?: () => void | Promise<void>;
+  initialSelectedId?: string | null;
+  onSelectionConsumed?: () => void;
 }) {
   const [items, setItems] = useState<DocListItem[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialSelectedId ?? null
+  );
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [detail, setDetail] = useState<DocDetail | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // If the parent focuses a new doc (e.g., from the graph), select it.
+  useEffect(() => {
+    if (initialSelectedId) {
+      setSelectedId(initialSelectedId);
+      setCreating(false);
+      onSelectionConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSelectedId]);
 
   async function refreshList() {
     try {
@@ -31,6 +47,22 @@ export function DocumentsView({
 
   useEffect(() => {
     void refreshList();
+  }, []);
+
+  // Refresh the list whenever the watcher sees a change under the vault
+  // root (edits from another editor, `git pull`, agent writes, etc.).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    api
+      .onVaultChanged(() => {
+        void refreshList();
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -229,7 +261,14 @@ function DocEditor({
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const isNew = initial === null;
+
+  useEffect(() => {
+    if (savedAt === null) return;
+    const t = setTimeout(() => setSavedAt(null), 1800);
+    return () => clearTimeout(t);
+  }, [savedAt]);
 
   async function save() {
     setErr(null);
@@ -246,6 +285,7 @@ function DocEditor({
         source: source.trim() || null,
         body,
       });
+      setSavedAt(Date.now());
       await onSaved(saved);
     } catch (e) {
       setErr(String(e));
@@ -299,6 +339,16 @@ function DocEditor({
           >
             {busy ? "Saving…" : "Save"}
           </button>
+          {savedAt !== null && (
+            <span
+              role="status"
+              aria-live="polite"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded transition-opacity"
+            >
+              <span aria-hidden="true">✓</span>
+              <span>Saved</span>
+            </span>
+          )}
         </div>
       </div>
 

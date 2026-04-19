@@ -8,6 +8,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // vault_info auto-opens the active registered workspace if one
+    // exists, or returns null on first run (registry empty).
     api
       .vaultInfo()
       .then((v) => setVault(v))
@@ -26,5 +28,5 @@ export default function App() {
     return <VaultPicker onOpened={setVault} />;
   }
 
-  return <Layout vault={vault} onSwitch={() => setVault(null)} />;
+  return <Layout vault={vault} onSwitched={setVault} />;
 }

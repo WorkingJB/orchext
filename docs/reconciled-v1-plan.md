@@ -1,5 +1,13 @@
 # Mytex v1 — Reconciled Plan
 
+> **Scope:** this document captures v1 decisions (D1–D6) only.
+> Phase 2 decisions (D7–D12: server packaging, multi-workspace
+> identity, session-bound decryption defaults, org context, team
+> roles, no-CRDTs) live in
+> [`implementation-status.md`](./implementation-status.md). Where the
+> two ever disagree, `implementation-status.md` wins for Phase 2 and
+> this doc wins for v1.
+
 This document reconciles `ARCHITECTURE.md` with the alternative proposal
 in `comparison-architecture.md`. It picks a side on every format-level
 decision so that `FORMAT.md` and the MCP surface can stabilize, and it

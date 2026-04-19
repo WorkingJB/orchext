@@ -329,3 +329,52 @@ The format deliberately does not define:
 
 These may be added in later spec versions if demand is real and the
 design is clearly within the guiding principles.
+
+---
+
+## 11. Planned additions for Phase 2
+
+These are not part of v0.1. They are sketched here so that vaults
+written today round-trip cleanly when Phase 2 ships.
+
+### 11.1 Workspace registry (Phase 2a)
+
+The desktop app tracks a user's registered workspaces in a single
+per-user file at `~/.mytex/workspaces.json` — **outside** any vault.
+This file is not part of the vault format; it is per-install client
+state. A vault root never references the registry. A vault remains
+portable: drop it onto another machine, register it as a new
+workspace, and it opens without edits.
+
+### 11.2 Team seed type `org/` (Phase 2c)
+
+Team workspaces add a new seed type `org/` for business context
+(goals, marketing stance, tone, policies) shared across members.
+Frontmatter semantics are unchanged; `type: org` is what the indexer
+and UI key on.
+
+`org/` earns a spec bump to v0.2 when it ships. Older readers opening
+a v0.2 vault treat `org/` as a custom type — they see the documents,
+just without the team-aware UI hints.
+
+### 11.3 Built-in visibility `org` (Phase 2c)
+
+A new built-in visibility label `org` is added for documents visible
+to all members of a team workspace, regardless of role.
+
+- Like `private`, `org` is a **hard label**: scope must contain the
+  literal string `org` to surface any `org`-labelled document. No
+  implicit promotion.
+- Unlike `private`, `org` is meaningful only inside a team workspace;
+  in a personal vault it behaves as a plain user-defined label.
+- Admin-only write (Phase 2c decision D10).
+
+### 11.4 `principal` field in team workspaces
+
+The reserved `principal` field (§3.2) starts carrying meaningful
+values in team workspaces: the ID of the account (member) or team
+that owns the document. The field already round-trips today; Phase 2c
+just starts populating it.
+
+No format change is required for 11.1 or 11.4. 11.2 and 11.3 are the
+v0.2 delta.

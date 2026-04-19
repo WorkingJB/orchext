@@ -174,6 +174,26 @@ impl Index {
         .await
         .map_err(|e| IndexError::Join(e.to_string()))?
     }
+
+    /// Every `(source_id, target_id)` link row. Used by the desktop
+    /// graph view to render the whole link graph in one trip.
+    pub async fn all_edges(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn.clone();
+        tokio::task::spawn_blocking(move || -> Result<Vec<(String, String)>> {
+            let conn = conn.lock().unwrap();
+            let mut stmt = conn.prepare(
+                "SELECT source_id, target_id FROM links ORDER BY source_id, target_id",
+            )?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await
+        .map_err(|e| IndexError::Join(e.to_string()))?
+    }
 }
 
 fn date_to_iso(d: NaiveDate) -> String {

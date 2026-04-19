@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, VaultInfo } from "./api";
 import { DocumentsView } from "./DocumentsView";
+import { GraphView } from "./GraphView";
+import { OnboardingView } from "./OnboardingView";
 import { TokensView } from "./TokensView";
 import { AuditView } from "./AuditView";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
-type View = "documents" | "tokens" | "audit";
+type View = "documents" | "graph" | "onboarding" | "tokens" | "audit";
 
 type Counts = {
   documents: number;
@@ -14,12 +17,16 @@ type Counts = {
 
 export function Layout({
   vault,
-  onSwitch,
+  onSwitched,
 }: {
   vault: VaultInfo;
-  onSwitch: () => void;
+  onSwitched: (v: VaultInfo) => void;
 }) {
-  const [view, setView] = useState<View>("documents");
+  // Auto-open onboarding on first-run (empty vault).
+  const [view, setView] = useState<View>(
+    vault.document_count === 0 ? "onboarding" : "documents"
+  );
+  const [focusDocId, setFocusDocId] = useState<string | null>(null);
   const [counts, setCounts] = useState<Counts>({
     documents: vault.document_count,
     tokens: 0,
@@ -41,22 +48,21 @@ export function Layout({
     void refreshCounts();
   }, [view, refreshCounts]);
 
+  // When the workspace switches, hop to Documents and refresh counts
+  // against the newly-active vault.
+  useEffect(() => {
+    setView(vault.document_count === 0 ? "onboarding" : "documents");
+    setFocusDocId(null);
+    setCounts({ documents: vault.document_count, tokens: 0, audit: 0 });
+    void refreshCounts();
+  }, [vault.workspace_id, vault.document_count, refreshCounts]);
+
   return (
     <div className="h-full flex flex-col">
-      <header className="border-b border-neutral-200 bg-white px-4 h-12 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold">Mytex</span>
-          <span className="text-neutral-400">·</span>
-          <span className="text-sm text-neutral-600 font-mono truncate max-w-[50ch]">
-            {vault.root}
-          </span>
-        </div>
-        <button
-          onClick={onSwitch}
-          className="text-xs text-neutral-500 hover:text-neutral-900"
-        >
-          Switch vault
-        </button>
+      <header className="border-b border-neutral-200 bg-white px-4 h-12 flex items-center gap-3">
+        <span className="font-semibold">Mytex</span>
+        <span className="text-neutral-400">·</span>
+        <WorkspaceSwitcher active={vault} onSwitched={onSwitched} />
       </header>
       <div className="flex flex-1 min-h-0">
         <nav className="w-44 border-r border-neutral-200 bg-white p-2 flex flex-col gap-1">
@@ -65,6 +71,18 @@ export function Layout({
             count={counts.documents}
             active={view === "documents"}
             onClick={() => setView("documents")}
+          />
+          <NavBtn
+            label="Graph"
+            count={counts.documents}
+            active={view === "graph"}
+            onClick={() => setView("graph")}
+          />
+          <NavBtn
+            label="Onboarding"
+            count={0}
+            active={view === "onboarding"}
+            onClick={() => setView("onboarding")}
           />
           <NavBtn
             label="Tokens"
@@ -79,8 +97,30 @@ export function Layout({
             onClick={() => setView("audit")}
           />
         </nav>
-        <main className="flex-1 min-w-0 bg-neutral-50">
-          {view === "documents" && <DocumentsView onMutated={refreshCounts} />}
+        <main key={vault.workspace_id} className="flex-1 min-w-0 bg-neutral-50">
+          {view === "documents" && (
+            <DocumentsView
+              onMutated={refreshCounts}
+              initialSelectedId={focusDocId}
+              onSelectionConsumed={() => setFocusDocId(null)}
+            />
+          )}
+          {view === "graph" && (
+            <GraphView
+              onSelectDoc={(id) => {
+                setFocusDocId(id);
+                setView("documents");
+              }}
+            />
+          )}
+          {view === "onboarding" && (
+            <OnboardingView
+              onComplete={async () => {
+                await refreshCounts();
+                setView("documents");
+              }}
+            />
+          )}
           {view === "tokens" && <TokensView onMutated={refreshCounts} />}
           {view === "audit" && <AuditView />}
         </main>

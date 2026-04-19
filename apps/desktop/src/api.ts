@@ -1,8 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
 export type VaultInfo = {
+  workspace_id: string;
+  name: string;
   root: string;
   document_count: number;
+};
+
+export type WorkspaceInfo = {
+  id: string;
+  name: string;
+  kind: string;
+  path: string;
+  active: boolean;
 };
 
 export type DocListItem = {
@@ -78,8 +89,54 @@ export type AuditPage = {
   chain_valid: boolean;
 };
 
+export type VaultChanged = {
+  type: string;
+  id: string;
+  kind: "upsert" | "remove";
+};
+
+export type GraphNode = {
+  id: string;
+  type: string;
+  title: string;
+  visibility: string;
+};
+
+export type GraphEdge = {
+  source: string;
+  target: string;
+};
+
+export type GraphSnapshot = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+export type SettingsInfo = {
+  has_api_key: boolean;
+};
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type OnboardingSeedDoc = {
+  id: string;
+  type: string;
+  visibility: string;
+  body: string;
+};
+
 export const api = {
-  vaultOpen: (path: string) => invoke<VaultInfo>("vault_open", { path }),
+  workspaceList: () => invoke<WorkspaceInfo[]>("workspace_list"),
+  workspaceAdd: (path: string, name?: string | null) =>
+    invoke<VaultInfo>("workspace_add", { path, name: name ?? null }),
+  workspaceActivate: (id: string) =>
+    invoke<VaultInfo>("workspace_activate", { id }),
+  workspaceRemove: (id: string) => invoke<void>("workspace_remove", { id }),
+  workspaceRename: (id: string, name: string) =>
+    invoke<void>("workspace_rename", { id, name }),
   vaultInfo: () => invoke<VaultInfo | null>("vault_info"),
   docList: () => invoke<DocListItem[]>("doc_list"),
   docRead: (id: string) => invoke<DocDetail>("doc_read", { id }),
@@ -91,6 +148,18 @@ export const api = {
   tokenRevoke: (id: string) => invoke<void>("token_revoke", { id }),
   auditList: (limit?: number) =>
     invoke<AuditPage>("audit_list", { limit: limit ?? null }),
+  graphSnapshot: () => invoke<GraphSnapshot>("graph_snapshot"),
+  settingsStatus: () => invoke<SettingsInfo>("settings_status"),
+  settingsSetApiKey: (apiKey: string) =>
+    invoke<void>("settings_set_api_key", { apiKey }),
+  onboardingChat: (history: ChatMessage[]) =>
+    invoke<{ reply: string }>("onboarding_chat", { input: { history } }),
+  onboardingFinalize: (history: ChatMessage[]) =>
+    invoke<OnboardingSeedDoc[]>("onboarding_finalize", { input: { history } }),
+  onboardingSave: (docs: OnboardingSeedDoc[]) =>
+    invoke<number>("onboarding_save", { input: { docs } }),
+  onVaultChanged: (cb: (evt: VaultChanged) => void): Promise<UnlistenFn> =>
+    listen<VaultChanged>("vault://changed", (e) => cb(e.payload)),
 };
 
 export const VISIBILITIES = ["public", "work", "personal", "private"] as const;
