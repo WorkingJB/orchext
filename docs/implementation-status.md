@@ -11,11 +11,11 @@ we are without reading git history.
 
 ## Snapshot
 
-**Last updated:** 2026-04-18
+**Last updated:** 2026-04-19
 
 **Toolchain:** Rust 1.95.0 stable (rustup). Workspace at repo root.
 
-**Test totals:** 55/55 passing.
+**Test totals:** 88/88 passing.
 
 | Crate         | Status    | Unit | Integration | Notes                                  |
 |---------------|-----------|-----:|------------:|----------------------------------------|
@@ -23,7 +23,8 @@ we are without reading git history.
 | `mytex-audit` | ✅ shipped | 2    | 5           | Hash-chained JSONL log                 |
 | `mytex-auth`  | ✅ shipped | 11   | 9           | Opaque tokens + Argon2id + scopes      |
 | `mytex-index` | ✅ shipped | 4    | 6           | SQLite + FTS5; search / graph / filter |
-| `mytex-mcp`   | 🚧 next    | —    | —           | Wire the three services behind JSON-RPC |
+| `mytex-mcp`   | ✅ shipped | 11   | 22          | JSON-RPC + stdio; rate limit + fs watcher |
+| `mytex-desktop` | ✅ MVP   | —    | —           | Tauri 2 + React; vault / tokens / audit UI |
 
 ---
 
@@ -143,33 +144,240 @@ by SQLite with FTS5.
 - `upsert_replaces_tags_and_links`: re-upserting a document replaces (not unions) its tag and link sets.
 - `reindex_from_vault_and_search`: reindex produces correct `IndexStats`, subsequent search returns hits.
 
----
+### `mytex-mcp` — 2026-04-19
+
+JSON-RPC 2.0 MCP server over stdio. Wires the four backing services
+(`vault`, `index`, `auth`, `audit`) behind the v1 surface defined by
+`MCP.md`.
+
+**Public API (library):**
+
+- `Server::new(vault, index, auth, audit, token)` — one server per
+  connection; `token` is an `AuthenticatedToken` already verified.
+- `Server::handle(Request) -> Option<Response>` — dispatches one
+  JSON-RPC message. Returns `None` for notifications.
+- `McpError` / `McpError::to_rpc()` — the code/tag mapping from
+  `MCP.md` §7 (`-32000..-32007`).
+- `rpc::{Request, Response, Notification, RpcError, Id}` — wire
+  envelope types.
+
+**Binary:** `mytex-mcp --token <TOKEN> --vault <VAULT_DIR>`. Reads
+line-delimited JSON from stdin, writes line-delimited JSON to stdout.
+
+**Implemented methods:** `initialize`, `initialized` (notification),
+`ping`, `tools/list`, `tools/call`, `resources/list`, `resources/read`,
+`resources/subscribe`, `resources/unsubscribe`.
+
+**Tools:** `context.search`, `context.get`, `context.list` under
+the `context.` namespace (D3). Results include provenance
+(`visibility`, `updated`, `source` when set).
+
+**Decisions recorded here:**
+
+- **Token pre-authenticated at startup.** `main.rs` calls
+  `TokenService::authenticate` before reading a single byte of
+  JSON-RPC input. An invalid token exits non-zero immediately;
+  every JSON-RPC message after that is implicitly authorized as
+  the pre-verified principal. This matches MCP.md §2.1 (stdio
+  launch) where the token arrives via `--token` and is bound to
+  the process lifetime.
+- **Index is rebuilt from the vault on every `serve` start.**
+  `reindex_from` is idempotent and cheap at v1 vault sizes. This
+  guarantees the index matches disk at T0 — important because the
+  fs watcher only fires on changes *after* it starts, so any docs
+  added while the server was down would otherwise be invisible
+  until touched.
+- **Rate limit: 60 requests / 10-second sliding window per token.**
+  Applies to `tools/*`, `resources/*`. `initialize`, `ping`, and
+  notifications are exempt — the limiter protects the indexer
+  and fs, not handshakes. When saturated returns `-32005 /
+  rate_limited` with `error.data.retry_after_ms` set to the wait
+  until the oldest in-window request ages out.
+- **`not_authorized` is deliberately ambiguous.** Out-of-scope,
+  nonexistent, and private-without-private-scope documents all
+  return `-32002 / not_authorized` from `context.get` and
+  `resources/read`. A test (`get_nonexistent_is_indistinguishable_from_out_of_scope`)
+  pins this so it cannot regress.
+- **Private hard floor is re-checked defensively in `context.get`.**
+  The index layer already enforces it via `allowed_visibility`, but
+  `get` reads from the vault (not the index) and re-checks
+  `visibility.is_private() && !scope.includes_private()` so a
+  future refactor of `Scope::allows` cannot silently widen access.
+- **`scope` request argument narrows only, never widens.**
+  `Scope::narrow_to` is intersection; a `scope: ["private"]`
+  argument on a token without `"private"` errors out rather than
+  granting access. Returned as `-32004 / invalid_argument`.
+- **Provenance-only, no sanitization (D5).** Results carry the
+  frontmatter `source` when set. The server does not scrub,
+  relabel, or reinterpret body text. For search hits `source`
+  costs one extra `vault.read` per hit — acceptable at the
+  bounded limits (≤100 docs); re-evaluate if needed by promoting
+  `source` into the index schema.
+- **Retrieval limits enforced in order `hard cap → token cap →
+  request`.** `limit` is clamped to 100 (hard), then to
+  `token.limits.max_docs`, then to what the caller asked for.
+  For search, a running `max_bytes` counter over snippet bytes
+  can truncate early and set `truncated: true`. For `context.get`,
+  `max_bytes` is not applied — a single-document fetch that the
+  caller asked for by ID should not be silently truncated.
+- **`resources/subscribe` emits updates via an fs watcher.** The
+  `notify` crate watches the vault root recursively (fsevent backend
+  on macOS; default elsewhere). On Create/Modify/Remove the watcher
+  thread classifies the path as `(type, id)`, upserts or removes the
+  doc from the index, then calls `Server::emit_resource_updated`
+  which fires `notifications/resources/updated` if the URI matches
+  a subscription (exact, type-prefix, or root). The vault root is
+  canonicalized at startup so fsevent's absolute paths line up with
+  the driver root.
+- **Audit on every dispatched call.** Every
+  `context.*` / `resources.read` call appends one JSONL entry
+  with actor = `tok:<id>`, outcome `ok` or `denied`, and the
+  scope in effect. `auth.mark_used` is touched on every attempt
+  (including denials) so revoked tokens still leave a trail.
+  Audit-write failure is logged via `tracing::warn` but never
+  fails the caller — the user's read must succeed even if the
+  audit sink is wedged.
+- **`tools/call` returns both `content` (text) and
+  `structuredContent` (typed JSON).** MCP clients that only look
+  at `content` get the tool result as a stringified JSON block;
+  strict clients read `structuredContent` directly without a
+  second parse.
+- **Tool input validation is hand-rolled (serde + explicit
+  length checks).** No JSON-schema validator dep. `tools/list`
+  still advertises schemas so agents can self-validate before
+  calling.
+
+**Notable tests:**
+
+- `search_private_floor_requires_explicit_private`: a token
+  without `private` cannot surface a private diary entry even
+  when the query body matches; with `private` in scope, it does.
+- `search_rejects_widening_scope_argument`: a `scope: ["private"]`
+  request on a work-only token returns `-32004 / invalid_argument`,
+  not a widened result set.
+- `get_nonexistent_is_indistinguishable_from_out_of_scope`:
+  both map to `-32002 / not_authorized` (enumeration defence).
+- `resources_list_filters_by_scope`: resource listings omit
+  URIs the token can't read; direct `resources/read` to those
+  URIs returns `-32002`.
+- `audit_log_grows_per_call`: both an ok `context.list` and a
+  denied `context.get` append chained JSONL entries that
+  `mytex_audit::verify` accepts.
+
+**Binary subcommands:**
+
+- `mytex-mcp init --vault <DIR> [--label <L>] [--scope work,public]
+  [--ttl-days N]` — creates the vault skeleton (seed type dirs +
+  `.mytex/`), issues an initial token, and prints (a) the token
+  secret (shown once), (b) the launch command, (c) a
+  ready-to-paste Claude Desktop `mcpServers` entry.
+- `mytex-mcp serve --vault <DIR> --token <TOKEN>` — the JSON-RPC
+  server itself. Reindexes at startup, spawns the fs watcher,
+  then enters a `tokio::select!` loop over `(stdin lines,
+  notification channel)`. On stdin EOF it drains any in-flight
+  notifications for up to 250 ms before exiting, so an fs event
+  racing a disconnect still reaches the client.
+
+**Known gaps (not in v1 surface):**
+
+- `context.propose` returns method-not-found; intentionally
+  deferred to v1.1 per MCP.md §5.4 and reconciled-v1-plan D6 (it
+  depends on the desktop review UI).
+- FSEvents coalesces bursts; a single `echo >> file.md` can emit
+  2–3 `notifications/resources/updated` for one logical write.
+  Clients dedupe by URI; this is a minor politeness issue, not a
+  correctness one. Debouncing would require `notify-debouncer-mini`
+  and is deferred.
 
 ---
 
-## In flight
+### `mytex-desktop` — 2026-04-19
 
-### `mytex-mcp`
+Tauri 2 desktop app (Rust backend + React/Vite/TS/Tailwind frontend).
+Lives at `apps/desktop/`; the Rust side is `apps/desktop/src-tauri/`
+(workspace member `mytex-desktop`) and the frontend at
+`apps/desktop/src/`.
 
-**Scope:** MCP server binary wiring the three services (`vault`, `auth`, `audit`, `index`) behind JSON-RPC over stdio. Implements `initialize`, `tools/list`, `resources/list`, `resources/read`, `resources/subscribe`, and the v1 tools `context.search`, `context.get`, `context.list` per MCP.md §5.
+**Screens:**
 
-**Planned decisions** (will record actuals once implemented):
+- **Vault picker** (first run or "Switch vault"): directory dialog via
+  `tauri-plugin-dialog`; `vault_open` creates the seed type dirs +
+  `.mytex/`, opens the persistent stores, runs a full `reindex_from`,
+  and returns a `VaultInfo` snapshot.
+- **Documents**: three-pane layout — types sidebar, document list,
+  detail editor. New / save / delete with frontmatter fields (id,
+  type, visibility, tags, source) and a markdown body textarea.
+  Every save goes through `vault.write` then `index.upsert` so search
+  stays consistent.
+- **Tokens**: list active + revoked tokens; issue form (label, scope
+  checkboxes with a distinct `private` warning, TTL days); the secret
+  is shown exactly once in a dismissable panel, then only the
+  redacted `PublicTokenInfo` remains on screen.
+- **Audit**: reverse-chronological table of `AuditEntry` rows with a
+  "chain verified" / "chain broken" badge backed by
+  `mytex_audit::verify`.
 
-- JSON-RPC 2.0 over stdio using line-delimited messages.
-- Token passed via `--token` CLI arg, not env (MCP.md §2.1).
-- Every call audited via `mytex-audit` with the token's ID as actor.
-- Scope evaluation at the service boundary: request comes in → authenticate → narrow scope → pass `allowed_visibility` into index queries.
-- Provenance metadata attached to every search/get response (id, visibility, updated, source).
-- Retrieval limits enforced server-side before responding.
+**Commands (Tauri backend):** `vault_open`, `vault_info`, `doc_list`,
+`doc_read`, `doc_write`, `doc_delete`, `token_list`, `token_issue`,
+`token_revoke`, `audit_list`. All are `async` and call the existing
+crates directly — no subprocess to `mytex-mcp`.
 
----
+**Decisions recorded here:**
+
+- **Services managed as `tokio::sync::RwLock<Option<OpenVault>>`** in
+  Tauri state. Commands `clone` out a `Services` snapshot of `Arc`s
+  under a short read lock, then do their work without holding the
+  lock, so concurrent requests don't serialize behind a slow command.
+- **Frontend calls crates through Tauri commands, not an in-process
+  MCP server.** An alternative was to embed `mytex-mcp` and talk to
+  it over stdio internally. Direct calls are simpler, keep the MCP
+  surface authoritative for agents (who are external by definition),
+  and avoid re-serializing every payload through JSON-RPC twice.
+- **Secret is shown once, then only `PublicTokenInfo`.** The
+  `token_issue` command returns `{ info, secret }`; the UI renders
+  the secret in a yellow dismissable panel with a copy button.
+  After dismiss, `token_list` no longer has access to the secret
+  (it was never stored in plaintext — Argon2id hash only).
+- **Reindex on vault open.** Same argument as mytex-mcp: watcher
+  (not yet wired in the desktop — see below) only fires on changes
+  *after* it starts, so any docs edited outside the app need a
+  ground-truth rebuild to surface in list/search.
+- **Markdown body is a `<textarea>`, not a rich editor.** Scope cut.
+  CodeMirror / rich preview is worth adding later but would have
+  tripled the UI work for little gain at this stage.
+- **Tailwind 3.4 + hand-rolled components** over shadcn/MUI/etc.
+  One style system, no transitive design-system churn; easy to
+  rip out if we pick a component library later.
+- **Icon is a generated placeholder.** `icons/icon.png` is a 32x32
+  solid-purple PNG produced from a Python one-liner; replace before
+  any distribution build.
+
+**Binary workflows:**
+
+- **Dev:** `cd apps/desktop && npm run tauri dev` — vite on
+  `localhost:1420`, Rust hot-reload from `src-tauri/`. Requires
+  `~/.cargo/bin` on PATH (Tauri invokes `cargo metadata` at startup).
+- **Build:** `npm run tauri build` — full `.app` / `.dmg` bundle.
+  Not exercised yet; icon needs replacement first.
+
+**Known gaps (MVP cuts, not v1-scope violations):**
+
+- **No fs watcher in the desktop.** `mytex-mcp` still watches and
+  notifies its own subscribers, but the desktop's doc list doesn't
+  refresh live when a file changes on disk. Refresh on tab-switch
+  is the workaround; wiring `notify` in the Tauri process is a
+  small follow-up.
+- **Graph view** (reconciled-v1-plan §v1 item 1) — explicitly cut
+  from the MVP; to be added when needed.
+- **Obsidian import** (§v1 item 5) — explicitly cut from the MVP.
+- **In-app onboarding agent** (§v1 item 6) — explicitly cut; needs
+  the Claude API integration work.
 
 ## Out of scope / deferred
 
 - Cloud sync + session-bound decryption (cloud milestone, not v1).
 - `context.propose` write-back flow (v1.1).
 - HTTP API (v1.1).
-- Tauri desktop app (separate milestone).
 
 ---
 
@@ -183,7 +391,11 @@ mytex/
 │  ├─ mytex-audit/            ✅ shipped
 │  ├─ mytex-auth/             ✅ shipped
 │  ├─ mytex-index/            ✅ shipped
-│  └─ mytex-mcp/              🚧 next
+│  └─ mytex-mcp/              ✅ shipped
+├─ apps/
+│  └─ desktop/                ✅ MVP
+│     ├─ src-tauri/           Rust (mytex-desktop crate)
+│     └─ src/                 React + Vite + TS + Tailwind
 └─ docs/
    ├─ ARCHITECTURE.md         v1 contract
    ├─ FORMAT.md               vault format spec
