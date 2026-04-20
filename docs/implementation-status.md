@@ -15,16 +15,19 @@ we are without reading git history.
 
 **Toolchain:** Rust 1.95.0 stable (rustup). Workspace at repo root.
 
-**Test totals:** 95/95 passing (+4 from new `workspaces::` tests in the desktop crate for Phase 2a).
+**Test totals:** 118/118 passing with `DATABASE_URL` set (for the
+`mytex-server` integration tests against a live Postgres); 109/109
+without. +23 tests for Phase 2b.1 (14 unit, 9 integration).
 
-| Crate         | Status    | Unit | Integration | Notes                                  |
-|---------------|-----------|-----:|------------:|----------------------------------------|
-| `mytex-vault` | ✅ shipped | 12   | 6           | Format parser + `PlainFileDriver`      |
-| `mytex-audit` | ✅ shipped | 2    | 5           | Hash-chained JSONL log                 |
-| `mytex-auth`  | ✅ shipped | 11   | 9           | Opaque tokens + Argon2id + scopes      |
-| `mytex-index` | ✅ shipped | 4    | 6           | SQLite + FTS5; search / graph / filter |
-| `mytex-mcp`   | ✅ shipped | 11   | 22          | JSON-RPC + stdio; rate limit + fs watcher |
-| `mytex-desktop` | ✅ Phase 2a | 7  | —           | Multi-vault switcher + workspace registry |
+| Crate         | Status        | Unit | Integration | Notes                                  |
+|---------------|---------------|-----:|------------:|----------------------------------------|
+| `mytex-vault` | ✅ shipped     | 12   | 6           | Format parser + `PlainFileDriver`      |
+| `mytex-audit` | ✅ shipped     | 2    | 5           | Hash-chained JSONL log                 |
+| `mytex-auth`  | ✅ shipped     | 11   | 9           | Opaque tokens + Argon2id + scopes      |
+| `mytex-index` | ✅ shipped     | 4    | 6           | SQLite + FTS5; search / graph / filter |
+| `mytex-mcp`   | ✅ shipped     | 11   | 22          | JSON-RPC + stdio; rate limit + fs watcher |
+| `mytex-desktop` | ✅ Phase 2a  | 7    | —           | Multi-vault switcher + workspace registry |
+| `mytex-server`| ✅ Phase 2b.1 | 14   | 9           | Axum + Postgres + opaque sessions      |
 
 ---
 
@@ -472,10 +475,152 @@ other local vault).
   effect. The next reindex on reactivation catches up.
 - **No keyboard shortcut** for workspace switching yet.
 
-## Phase 2 — Multi-vault, server, teams (planning)
+### `mytex-server` — 2026-04-19 (Phase 2b.1)
 
-> Status: **planning only.** No code yet. This section captures shape
-> and decisions so the next working session can pick up without
+Axum HTTP server, Postgres-backed account + session store. Proves the
+deployment shape (Docker, Postgres, migrations) before vault endpoints,
+crypto, or MCP HTTP depend on it. No vault endpoints yet — those are
+2b.2.
+
+**Public API (library):**
+
+- `router(state: AppState) -> axum::Router` — full app router,
+  including `/healthz` and `/v1/auth/*`.
+- `migrate(&PgPool)` — runs embedded `./migrations` against the pool.
+- `AppState { db, sessions }` — handle shared across handlers.
+- `sessions::SessionService` — `issue / authenticate / revoke /
+  list_for_account`.
+- `accounts::{signup, by_id, verify_password}` — account CRUD with
+  argon2 password hashing and email normalization.
+- `password::{hash, verify}` — thin Argon2id wrapper (PHC strings).
+
+**Binary:** `mytex-server`. Reads `DATABASE_URL` and optional
+`MYTEX_BIND` (default `0.0.0.0:8080`); runs migrations on startup,
+serves traffic, shuts down cleanly on SIGINT/SIGTERM.
+
+**Routes:**
+
+- `GET  /healthz` — `{"ok": true}`, no auth.
+- `POST /v1/auth/signup` — email + password; creates account +
+  personal tenant + owner membership + first session.
+- `POST /v1/auth/login` — returns a new session for valid creds.
+- `GET  /v1/auth/me` — authenticated; returns current account.
+- `GET  /v1/auth/sessions` — authenticated; lists caller's
+  non-revoked sessions.
+- `DELETE /v1/auth/logout` — authenticated; revokes the current
+  session.
+
+**Schema (`migrations/0001_initial.sql`):**
+
+- `accounts(id, email, password, display_name, created_at, updated_at)`
+  with a `lower(email)` index.
+- `sessions(id, account_id, token_prefix, token_hash, label,
+  created_at, expires_at, last_used_at, revoked_at)` — opaque
+  `mtx_*` secret, Argon2id-hashed at rest, first-12 prefix indexed.
+- `tenants(id, name, kind)` — `kind in {personal, team}`, one
+  personal tenant auto-created per account.
+- `memberships(tenant_id, account_id, role)` — `role in {owner,
+  admin, member}`; currently only the owner row is created at signup.
+  Unused beyond bootstrap until Phase 2c.
+
+**Decisions recorded here:**
+
+- **Runtime-checked queries, not `sqlx::query!` macros.** The macros
+  need a live DB at compile time (or a prepared `.sqlx/` cache).
+  Neither is set up yet. Using `sqlx::query_as::<_, StructWithFromRow>`
+  gives us runtime-checked queries without compile-time infra. Tests
+  (integration, against real Postgres) catch query errors. Migrate
+  to `query!` once CI has Postgres + we run `cargo sqlx prepare`.
+- **Enumeration-resistant auth errors.** Unknown email, wrong
+  password, revoked session, expired session all map to the same
+  `401 Unauthorized` with `error.tag: "unauthorized"`. The unknown-
+  email branch of `verify_password` runs a dummy Argon2 verify
+  against a fixed valid PHC string to keep response time roughly
+  constant. A unit test (`accounts::tests::dummy_phc_parses`) pins
+  the dummy so a future Argon2 upgrade can't break it silently.
+- **Signup always issues a session.** A new user should not have to
+  POST login immediately after signup. The signup response body
+  matches the login response shape; clients treat them identically.
+- **Personal tenant bootstrap is in the signup transaction.** If the
+  tenant / membership insert fails, the account insert rolls back.
+  Guarantees the invariant "every account has exactly one personal
+  tenant they own" even under partial failure.
+- **In-memory session cache, 60s TTL.** Every request hits the DB
+  for session validation by default — cached for 60s after a
+  successful lookup. Revocation invalidates the cache by session_id
+  so `revoke → subsequent request` is immediately rejected (the test
+  `logout_revokes_session` pins this). 60s is a deliberate staleness
+  budget: an expired or password-changed session stays live up to
+  60s after the change, which is fine for the product's threat
+  model and saves one Argon2 verify per request. Cache is bounded
+  at 10k entries (drops all on overflow — unsophisticated eviction
+  is fine at this scale).
+- **Session prefix of 12 chars** (`mtx_` + 8) for the lookup. Same
+  pattern as `mytex-auth`: enough entropy in the prefix that there
+  is effectively no collision risk in a single-tenant DB, indexed
+  for O(1) lookup. The real verify is Argon2id against the stored
+  hash.
+- **`tenant_id` columns live now even though multi-tenancy isn't
+  enforced** (2c). Avoids a future schema migration at the moment
+  enforcement lands.
+- **Runtime-only config from env.** No TOML / YAML config file. Two
+  required vars (`DATABASE_URL`, optional `MYTEX_BIND`); anything
+  else needs a code change. Keeps the deploy story tight.
+
+**Notable tests:**
+
+- `signup_then_me_roundtrip` — signup returns a bearer that lets
+  `/v1/auth/me` return the same account.
+- `login_unknown_email_indistinguishable_from_wrong_password` — pins
+  the enumeration-resistance invariant. Both branches return 401
+  with `error.tag: "unauthorized"`.
+- `logout_revokes_session` — after DELETE /v1/auth/logout, the same
+  bearer is rejected on the next request (cache invalidation works).
+- `duplicate_signup_conflicts` — 409 on email re-registration,
+  mapped from Postgres `23505 unique_violation`.
+- `short_password_rejected` — 400 if password under 12 chars.
+- `healthz_ok` — `/healthz` serves without auth.
+- Plus 14 unit tests across `accounts`, `sessions`, `password`,
+  `auth::bearer_from_headers`.
+
+**Packaging:**
+
+- `crates/mytex-server/Dockerfile` — multi-stage (rust-slim builder
+  → debian-slim runtime). Runs as unprivileged user `mytex` uid 1000.
+  No curl/wget baked in; healthcheck is compose's responsibility.
+- `crates/mytex-server/docker-compose.yml` — spins up `postgres:16-alpine`
+  + the server image built from the repo root. Dev uses
+  `localhost:8080` over plain HTTP; production expects a TLS
+  terminator in front.
+- `crates/mytex-server/.env.example` — documented env vars
+  (`MYTEX_POSTGRES_PASSWORD`). Not committed as `.env`.
+
+**Known gaps after Phase 2b.1:**
+
+- **No vault endpoints.** That's 2b.2. Today's server only does auth.
+- **No email verification / password reset / rate limiting.** All
+  additive; not in 2b.1's tight scope.
+- **No CI Postgres.** Integration tests run locally against a
+  docker-run'd Postgres (`docker run --rm -d -e POSTGRES_USER=mytex
+  -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=mytex_test -p 5555:5432
+  postgres:16-alpine` + `DATABASE_URL=postgres://mytex:testpw@
+  localhost:5555/mytex_test`). Wiring the same into CI is a follow-
+  up; currently a dev must have Docker to run the integration suite.
+- **`sqlx::query!` macro migration.** Deferred until CI can run
+  `cargo sqlx prepare` against a live DB and commit the `.sqlx/`
+  cache. Until then, query errors surface only at runtime (caught
+  by integration tests).
+- **No MCP transport yet.** HTTP/SSE MCP lands with 2b.4.
+- **No TLS in the reference compose file.** Plain HTTP on `:8080`.
+  Production deployments add Caddy/Traefik/Nginx in front; we ship
+  compose snippets for those when we publish the first image.
+
+## Phase 2 — Multi-vault, server, teams
+
+> Status: **in progress.** Phase 2a (multi-vault desktop) and
+> Phase 2b.1 (server skeleton + auth) have shipped; see "Shipped
+> crates" above for details. This section captures the remaining
+> shape and decisions so any working session can pick up without
 > re-deriving context.
 
 ### Goals — six use cases
@@ -547,6 +692,55 @@ version-checked against document hash (already computed by
 `mytex-vault`). Conflicts surface as last-write-wins with a UI prompt.
 Multi-device offline editing is a v3 concern.
 
+**D13. Phase 2b is split into five sub-milestones.**
+`mytex-server` + `mytex-crypto` + `mytex-sync` + `apps/web` is too
+much to land atomically. Order:
+
+- **2b.1** — Server skeleton + user auth. Axum, Postgres, sessions.
+  Plaintext blob storage at rest. No vault endpoints.
+- **2b.2** — Server vault + index + token endpoints; `mytex-sync`
+  client. Desktop gains a remote workspace. Still plaintext.
+- **2b.3** — `mytex-crypto` + session-bound decryption. Retrofit
+  encryption onto 2b.2's endpoints.
+- **2b.4** — `context.propose` + MCP HTTP/SSE transport. OAuth 2.1
+  + PKCE for agent tokens lands here (not 2b.1, because users don't
+  need it until agents hit HTTP MCP).
+- **2b.5** — `apps/web` web client + WASM crypto.
+
+**D14. No managed backend (no Supabase).**
+Supabase buys us ~2–3 weeks on auth flows but costs us a 6–7
+container self-host stack, a heavyweight external dependency in
+fast flux, and a fork between SaaS and self-host paths. The
+interesting parts of Mytex (MCP protocol, session-bound decryption,
+audit chain) are custom and Supabase does not help with any of them.
+Self-host stays at 2 containers (server + Postgres) which is the
+story we want to tell. Stack tight: `sqlx` + `argon2` + `axum` SSE +
+`argon2` migrations. Industry-light, not industry-thin.
+
+**D15. Session model — opaque server-side sessions, not JWT.**
+One-click revoke is a product feature (ARCH §5.2); JWTs would need
+a denylist to support that, which defeats statelessness. `mytex-auth`
+already uses opaque tokens for MCP agents; user-login sessions use
+the same shape (opaque `mtx_*` prefix, Argon2id-hashed at rest,
+revocable). Per-request DB work is already paid by audit logging.
+Single-service, single-Postgres shape has no distributed-validation
+surface for JWT to win on. Federated SSO later (Google/GitHub) fits
+this cleanly — we receive a JWT from the IdP and issue our own
+opaque session.
+
+**D16. Auth implementation — rolled, not a library.**
+OAuth 2.1 + PKCE is ~500 lines of well-specified Rust. Pulling in
+`oxide-auth` or similar adds config complexity we don't need and
+couples the auth surface to a dep's opinions. `argon2` is already
+a workspace dep (used in `mytex-auth`); reuse it. `sqlx` offline-
+checked queries match `rusqlite` ergonomics elsewhere in the repo.
+
+**D17. Crate layout — `crates/mytex-server`, lib + bin.**
+Same shape as `mytex-mcp`: a library crate exposing a library for
+tests and integration, plus a `mytex-server` binary for the docker
+image. Keeps `apps/` reserved for end-user clients (desktop, later
+web); servers live under `crates/`.
+
 ### Phases
 
 #### Phase 2a — Multi-vault desktop + workspace switcher
@@ -565,36 +759,245 @@ No network yet. Teach the desktop that "vault" is plural.
 - **Unblocks:** use case 5 locally.
 - **Cuts:** no cross-workspace search; no "all workspaces" view.
 
-#### Phase 2b — Server + remote driver + sync
+#### Phase 2b — Server + remote driver + sync (five sub-milestones, D13)
 
-The bulk of the work. One user, one remote workspace, end-to-end.
+Too big to land atomically. Each sub-milestone is independently
+useful and testable.
 
-- **New crate: `mytex-server`** (axum).
-  - HTTP surface mirrors `VaultDriver` + `Index` + `TokenService` +
-    `AuditWriter` operations over REST/JSON.
-  - OAuth 2.1 with PKCE, audience-bound tokens (D4 cashed in).
-  - Postgres for accounts, sessions, memberships, opaque blobs,
-    per-tenant audit.
-  - Session-key management (D9).
-  - `Dockerfile` + `docker-compose.yml` (D7).
-- **New crate: `mytex-crypto`** — libsodium/age wrappers for the Q3
-  key hierarchy: `passphrase → master key (device-only) → session
-  key (TTL-bound) → per-document keys`. WASM-compiled for web client.
-- **New crate: `mytex-sync`** — client library. Implements the
-  existing `VaultDriver` trait against a remote `mytex-server`, plus
-  a local-index-as-cache policy for offline reads. Server is
-  authoritative; local cache is best-effort.
-- **New app: `apps/web`** — Vite/React client, reuses components from
-  `apps/desktop/src/` where possible.
-- **`context.propose` ships** — deferred from v1.1, first-class here.
-- **Existing crates touched:**
-  - `mytex-auth` — OAuth 2.1 path alongside the existing opaque tokens.
-  - `mytex-mcp` — HTTP/SSE transport next to the existing stdio.
-  - `mytex-desktop` — "connect to server" workspace flow.
-  - `mytex-vault`, `mytex-index`, `mytex-audit` — no surface change;
-    they run on server or client.
-- **Unblocks:** use case 2. Also a power-user flavor of use case 1
-  (own server, own devices).
+##### 2b.1 — Server skeleton + user auth (plaintext)
+
+Gets the deployment shape real before anything depends on it.
+
+- **New crate:** `crates/mytex-server` (axum, lib + bin, D17).
+- **Postgres schema** via `sqlx` migrations: `accounts`, `sessions`,
+  `memberships` (latter unused until 2c; schema exists so we don't
+  migrate later). `tenant_id` columns present and NOT NULL even
+  though a single implicit tenant is enforced in 2b.1.
+- **Auth flow** — email + password signup, login, logout, `me`.
+  Password hash via `argon2` (reuse workspace dep). Session token
+  is opaque `mtx_*` + Argon2id hash at rest (D15, mirrors
+  `mytex-auth`). `last_used` updated on every authenticated request;
+  revoke = delete row.
+- **Endpoints:** `/healthz`, `POST /v1/auth/signup`,
+  `POST /v1/auth/login`, `DELETE /v1/auth/logout`,
+  `GET /v1/auth/me`, `GET /v1/auth/sessions` (current user's
+  sessions with `last_used`).
+- **Session middleware** parses `Authorization: Bearer <token>`,
+  looks up + validates, attaches account to request extensions.
+  60-second in-memory cache in front of the DB lookup — bounded
+  staleness for revocation (acceptable), cheap for bursty clients.
+- **Packaging:** multi-stage `Dockerfile` + `docker-compose.yml`
+  (server + Postgres, optional Caddy for TLS). Dev uses plain HTTP
+  on `localhost:8080`.
+- **Tests:** `sqlx::test` macro for integration tests against a
+  real Postgres (skip when `TEST_DATABASE_URL` unset). Covers
+  signup → login → middleware accept/reject → logout.
+- **No OAuth 2.1 authorization-code flow yet.** That's for agent
+  tokens, lands in 2b.4 when MCP HTTP does. Users log in with
+  password; the token returned is an opaque session, same shape
+  `mytex-auth` already uses.
+- **No vault endpoints yet** (2b.2).
+- **Cuts:** no email verification, no password reset, no rate
+  limiting beyond what axum/tower gives; all additive in 2b.x.
+
+##### 2b.2 — Vault + index endpoints, `mytex-sync` client
+
+Server speaks the `VaultDriver` + `Index` + token + audit surface
+over HTTP. Desktop workspace `kind = "remote"` becomes usable.
+Still plaintext at rest; encryption retrofits in 2b.3.
+
+**New crate: `crates/mytex-sync`**
+
+Client-side library that turns a running `mytex-server` into a valid
+implementation of the existing traits, so desktop code that calls
+`VaultDriver::list` works unchanged against a remote workspace.
+
+Target shape:
+
+```rust
+pub struct RemoteConfig {
+    pub server_url: Url,
+    pub tenant_id: Uuid,        // resolved at login; one per account today
+    pub session_token: String,  // raw "mtx_*" bearer
+}
+
+pub struct RemoteVaultDriver { /* reqwest::Client + RemoteConfig */ }
+#[async_trait] impl VaultDriver for RemoteVaultDriver { /* list/read/write/delete */ }
+
+pub struct RemoteIndex { /* shared client */ }
+// Mirrors the subset of `mytex-index::Index` that the MCP/desktop surface
+// actually calls: search(SearchQuery), list(ListFilter), all_edges(),
+// outbound_links(id), backlinks(id).
+```
+
+Local SQLite index as a best-effort read cache — populated on every
+successful list/search; served optimistically on cache hit with a
+5 s TTL, falls through to the server on miss. A `ServerChanges` SSE
+subscription (server side) invalidates cache entries per document
+id on remote writes.
+
+**Server-side schema additions (new migration):**
+
+```sql
+CREATE TABLE documents (
+    tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    doc_id      TEXT NOT NULL,
+    type_       TEXT NOT NULL,
+    visibility  TEXT NOT NULL,
+    frontmatter JSONB NOT NULL,   -- serialized Frontmatter
+    body        TEXT NOT NULL,    -- markdown, plaintext in 2b.2
+    version     TEXT NOT NULL,    -- sha256:... of canonical serialization
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, doc_id)
+);
+CREATE INDEX documents_tenant_type_idx ON documents (tenant_id, type_);
+CREATE INDEX documents_tenant_visibility_idx ON documents (tenant_id, visibility);
+
+-- tsvector column + GIN index for full-text search, matches the FTS5
+-- shape mytex-index offers locally.
+ALTER TABLE documents ADD COLUMN tsv tsvector
+  GENERATED ALWAYS AS (to_tsvector('english', body)) STORED;
+CREATE INDEX documents_tsv_idx ON documents USING GIN (tsv);
+
+CREATE TABLE doc_tags (
+    tenant_id UUID NOT NULL,
+    doc_id    TEXT NOT NULL,
+    tag       TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, doc_id, tag),
+    FOREIGN KEY (tenant_id, doc_id) REFERENCES documents(tenant_id, doc_id) ON DELETE CASCADE
+);
+
+CREATE TABLE doc_links (
+    tenant_id UUID NOT NULL,
+    source    TEXT NOT NULL,
+    target    TEXT NOT NULL,
+    PRIMARY KEY (tenant_id, source, target),
+    FOREIGN KEY (tenant_id, source) REFERENCES documents(tenant_id, doc_id) ON DELETE CASCADE
+);
+
+-- Per-tenant audit log (matches mytex-audit's JSONL shape, but in Postgres).
+CREATE TABLE audit_entries (
+    tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    seq         BIGINT NOT NULL,
+    ts          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    actor       TEXT NOT NULL,       -- "owner" | "tok:<id>" | "account:<uuid>"
+    action      TEXT NOT NULL,
+    document_id TEXT,
+    scope_used  TEXT[] NOT NULL DEFAULT '{}',
+    outcome     TEXT NOT NULL CHECK (outcome IN ('ok','denied','error')),
+    prev_hash   TEXT NOT NULL,       -- hex
+    hash        TEXT NOT NULL,       -- hex, computed over canonical JSON
+    PRIMARY KEY (tenant_id, seq)
+);
+```
+
+**Endpoint surface** (all under `/v1`, all behind session middleware):
+
+| Method | Path                                  | Notes                         |
+| ---    | ---                                   | ---                           |
+| GET    | `/tenants`                            | list memberships for caller   |
+| GET    | `/t/{tenant_id}/vault/docs`           | list documents (filters via query params) |
+| GET    | `/t/{tenant_id}/vault/docs/{doc_id}`  | read one                      |
+| PUT    | `/t/{tenant_id}/vault/docs/{doc_id}`  | write one; returns new version |
+| DELETE | `/t/{tenant_id}/vault/docs/{doc_id}`  | remove                        |
+| GET    | `/t/{tenant_id}/index/search`         | FTS + filters                 |
+| GET    | `/t/{tenant_id}/index/list`           | index-only list, no bodies    |
+| GET    | `/t/{tenant_id}/index/graph`          | `{nodes, edges}`              |
+| GET    | `/t/{tenant_id}/index/backlinks/{id}` | backlinks for a doc           |
+| GET    | `/t/{tenant_id}/tokens`               | list MCP tokens for tenant    |
+| POST   | `/t/{tenant_id}/tokens`               | issue MCP token               |
+| DELETE | `/t/{tenant_id}/tokens/{id}`          | revoke                        |
+| GET    | `/t/{tenant_id}/audit`                | paginated audit entries       |
+| GET    | `/t/{tenant_id}/events`               | SSE; fires on `vault://changed` |
+
+Error shape reuses `crates/mytex-server/src/error.rs::ApiError` with
+the tag set aligned to `MCP.md` §7 (`unauthorized` covers out-of-scope
++ missing + revoked; `version_conflict` for write on stale base; etc.).
+
+**Desktop changes:**
+
+- `WorkspaceEntry` grows optional fields: `server_url`, `session_token`
+  (OS keychain; start with plaintext in `.mytex/` and migrate to
+  `keyring` crate in 2b.3 with the unlock flow).
+- New first-run action: **"Connect to a server"** alongside
+  **"Choose vault folder"**. Collects server URL + email + password,
+  calls `/v1/auth/login`, stores the resulting session, picks the
+  first available tenant (prompts if multiple later).
+- `state::open_workspace` routes on `entry.kind`:
+  - `"local"` → today's `PlainFileDriver` + local `Index`.
+  - `"remote"` → `RemoteVaultDriver` + `RemoteIndex` from `mytex-sync`.
+- Everything downstream (commands, views) is trait-driven and keeps
+  working. `WorkspaceSwitcher` shows a small "☁" badge for remote.
+
+**Cuts from 2b.2:**
+
+- No encryption at rest (→ 2b.3).
+- No OAuth 2.1 PKCE for agent tokens (→ 2b.4). MCP tokens issued via
+  POST `/v1/t/{tid}/tokens` remain session-backed for now (authed via
+  bearer, not via OAuth).
+- No offline write queue. If the network drops mid-edit we surface an
+  error and preserve the unsaved body in the UI; no automatic retry.
+- No cross-tenant search. Scope stays `/t/{tenant_id}/...`.
+
+**Open questions for 2b.2:**
+
+- **Where does the MCP server run for a remote workspace?** Desktop
+  keeps running the local `mytex-mcp` stdio server against the
+  `RemoteVaultDriver`/`RemoteIndex`, so agents talking to the desktop
+  continue to work transparently. Agents talking directly to the
+  server use 2b.4's HTTP/SSE transport. Likely both ship.
+- **Cache invalidation on SSE vs polling** — start with SSE; fall
+  back to polling if SSE proves unreliable on hosted infra.
+- **Audit chain across local + server.** If the same tenant is
+  written from two clients, the per-tenant audit chain on the
+  server is authoritative. Desktop's local audit JSONL becomes a
+  cache/mirror for local workspaces only.
+
+##### 2b.3 — `mytex-crypto` + session-bound decryption
+
+Encryption at rest + the key hierarchy from ARCH §3.4 / Q3.
+
+- **New crate:** `crates/mytex-crypto` — libsodium or age wrappers.
+  Key hierarchy: `passphrase → master key (device-only) → session
+  key (TTL-bound) → per-doc keys`. WASM-compilable for the web
+  client (2b.5).
+- **Server changes:** store blobs encrypted; server holds a
+  short-lived session key published by an active client. When no
+  session key is live → falls back to opaque blobs, reads return
+  `-32006 / vault_locked`. Strict-E2EE opt-out is a per-account flag.
+- **Desktop changes:** unlock flow — passphrase once per session,
+  cached in OS keychain (keyring crate); session-key heartbeat to
+  server while unlocked.
+
+##### 2b.4 — `context.propose` + MCP HTTP/SSE
+
+Finally makes the server reachable by external agents over MCP.
+
+- **MCP transport** on `mytex-server`: JSON-RPC over HTTP + SSE
+  per `MCP.md` §2.2. Same tools, same error model.
+- **OAuth 2.1 + PKCE** for agent token issuance — rolled (D16).
+  Authorization-code + PKCE, audience-bound bearer tokens, issued
+  by the logged-in user via the desktop/web UI. Opaque token shape
+  (still D15) — OAuth defines the *issuance* flow, not the token
+  encoding.
+- **`context.propose`** lands on both surfaces. Desktop + web
+  proposal review queue for admins (2c-ready).
+
+##### 2b.5 — Web client
+
+Separate app, feature-parity with desktop's remote-workspace mode.
+
+- **New app:** `apps/web` — Vite + React + Tailwind, mirrors
+  `apps/desktop/src/` components as much as possible.
+- **WASM crypto:** `mytex-crypto` compiled to wasm32 target for
+  in-browser decryption. Session-key publish happens from the
+  browser once the user unlocks.
+- **No stdio MCP** (browser can't spawn processes) — hosted
+  integrations go through the server's HTTP/SSE MCP from 2b.4.
+
+**Unblocks after full 2b:** use case 2 end-to-end. Also a power-
+user flavor of use case 1 (own server, own devices).
 
 #### Phase 2c — Teams and org context
 
@@ -618,12 +1021,12 @@ Multi-tenant on the same server, plus team semantics.
 
 ### New crates / apps summary
 
-| Name            | Kind  | Phase | Role                                          |
-| ---             | ---   | ---   | ---                                           |
-| `mytex-server`  | crate | 2b    | Axum HTTP + Postgres + OAuth; Docker-packaged |
-| `mytex-crypto`  | crate | 2b    | Session-bound key hierarchy; WASM-compilable  |
-| `mytex-sync`    | crate | 2b    | Client-side `VaultDriver` over HTTPS          |
-| `apps/web`      | app   | 2b    | React web client (parallel to desktop)        |
+| Name            | Kind  | Phase   | Role                                          |
+| ---             | ---   | ---     | ---                                           |
+| `mytex-server`  | crate | 2b.1+   | Axum HTTP + Postgres; Docker-packaged         |
+| `mytex-sync`    | crate | 2b.2    | Client-side `VaultDriver` over HTTPS          |
+| `mytex-crypto`  | crate | 2b.3    | Session-bound key hierarchy; WASM-compilable  |
+| `apps/web`      | app   | 2b.5    | React web client (parallel to desktop)        |
 
 Phases 2a and 2c add no new crates — both extend existing ones.
 
@@ -640,19 +1043,38 @@ Phases 2a and 2c add no new crates — both extend existing ones.
 
 ### Open questions
 
-- **OAuth provider.** Run our own IdP for SaaS, integrate a hosted
-  auth (WorkOS / Clerk / Supabase Auth), or both? Self-host customers
-  will eventually want OIDC pluggability.
-- **DB toolchain.** `sqlx` (offline-checked queries, matches
-  `rusqlite` ergonomics) vs `sea-orm` / `diesel`. Lean: `sqlx`.
-- **Conflict UI.** Version-miss surfaces as inline diff + pick-a-side,
-  or re-open for manual merge?
-- **Web client tech.** Vite + React + Tailwind (mirror desktop for
-  component reuse) vs a meta-framework. Lean: match desktop.
-- **MCP transport for team workspaces.** Desktop users run local
-  `mytex-mcp` against the remote workspace (fast path), hosted
-  integrations hit the server's HTTP/SSE MCP directly. Likely both.
-- **Invite UX.** Email magic link, shareable join-code link, or both?
+Resolved this session (captured in decisions above):
+
+- ✅ **DB toolchain.** `sqlx` with runtime-checked queries in 2b.1;
+  migrate to `query!` + offline cache when CI has Postgres.
+- ✅ **Web client tech.** Vite + React + Tailwind, mirror desktop.
+- ✅ **MCP transport for team workspaces.** Both — desktop runs local
+  `mytex-mcp` against `RemoteVaultDriver` (2b.2); hosted integrations
+  hit the server's HTTP/SSE MCP (2b.4).
+- ✅ **Managed backend?** No Supabase (D14). Self-host stays at 2
+  containers.
+- ✅ **Session model.** Opaque server-side, not JWT (D15).
+
+Still open:
+
+- **OAuth provider for SaaS.** We run our own IdP (rolled, D16) for
+  Phase 2. Integrating federated SSO (Google, GitHub, Okta, WorkOS)
+  and making it pluggable for self-host enterprise customers is a
+  Phase 2c+ question.
+- **Conflict UI (2b.2+).** Version-miss on write returns
+  `version_conflict`. UX options: inline diff + pick-a-side, or
+  re-open the editor with both versions for a manual merge. TBD when
+  2b.2 lands and we can exercise the case.
+- **Invite UX (2c).** Email magic link, shareable join-code link, or
+  both. Email needs an SMTP dep and deliverability story; join link
+  is simpler but more copy-paste.
+- **Keychain story for session tokens (2b.2/2b.3).** Today the desktop
+  stores the Anthropic API key in plaintext in `.mytex/settings.json`.
+  Remote session tokens will want OS keychain (`keyring` crate) before
+  we ship a distribution build — track as a Phase 2b.3 dep since the
+  unlock flow lands with crypto.
+- **Sync cache TTL + SSE fallback (2b.2).** Start at 5 s TTL + SSE
+  invalidation; revisit if SSE proves flaky on hosted infra.
 
 ---
 
@@ -674,16 +1096,75 @@ mytex/
 │  ├─ mytex-audit/            ✅ shipped
 │  ├─ mytex-auth/             ✅ shipped
 │  ├─ mytex-index/            ✅ shipped
-│  └─ mytex-mcp/              ✅ shipped
+│  ├─ mytex-mcp/              ✅ shipped
+│  └─ mytex-server/           ✅ Phase 2b.1
+│     ├─ src/                 lib + bin (axum HTTP API)
+│     ├─ migrations/          sqlx migrations (Postgres)
+│     ├─ tests/               integration tests (need live Postgres)
+│     ├─ Dockerfile           multi-stage, debian-slim runtime
+│     ├─ docker-compose.yml   postgres + server; dev profile
+│     └─ .env.example         reference env vars for compose
 ├─ apps/
-│  └─ desktop/                ✅ MVP
+│  └─ desktop/                ✅ Phase 2a
 │     ├─ src-tauri/           Rust (mytex-desktop crate)
 │     └─ src/                 React + Vite + TS + Tailwind
 └─ docs/
-   ├─ ARCHITECTURE.md         v1 contract
-   ├─ FORMAT.md               vault format spec
-   ├─ MCP.md                  MCP surface spec
-   ├─ reconciled-v1-plan.md   decisions doc (supersedes source docs on listed points)
+   ├─ ARCHITECTURE.md         v1 contract + Phase 2 overview
+   ├─ FORMAT.md               vault format spec + Phase 2 planned additions
+   ├─ MCP.md                  MCP surface spec + Phase 2 roadmap
+   ├─ reconciled-v1-plan.md   v1 decisions (D1–D6)
    ├─ comparison-architecture.md  alternate proposal (input only; superseded)
-   └─ implementation-status.md   this file
+   └─ implementation-status.md   this file (Phase 2 decisions D7–D17 + progress)
+```
+
+---
+
+## Development quick-reference
+
+### Running the full test suite
+
+```bash
+# Without Postgres: 109 tests pass (mytex-server integration tests skip).
+cargo test --workspace
+
+# With Postgres: 118 tests pass. Spin up a throwaway container:
+docker run --rm -d --name mytex-test-pg \
+  -e POSTGRES_USER=mytex -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=mytex_test \
+  -p 5555:5432 postgres:16-alpine
+
+DATABASE_URL="postgres://mytex:testpw@localhost:5555/mytex_test" \
+  cargo test --workspace
+
+docker stop mytex-test-pg
+```
+
+`sqlx::test` creates a fresh database per test function, so there is
+no state bleed between tests. The throwaway container is for dev
+ergonomics only; CI will want a persistent Postgres service.
+
+### Running mytex-server locally
+
+```bash
+# From crates/mytex-server/:
+cp .env.example .env
+docker compose up            # postgres + server on localhost:8080
+curl http://localhost:8080/healthz
+
+# Or for a hot-reload dev loop on the server:
+docker compose up -d postgres
+DATABASE_URL="postgres://mytex:mytex-dev-password@localhost/mytex" \
+  cargo run -p mytex-server
+```
+
+### Running the desktop app
+
+```bash
+cd apps/desktop
+npm install
+npm run tauri dev
+```
+
+First run shows the vault picker; registers the chosen directory as
+a workspace in `~/.mytex/workspaces.json`. Subsequent launches
+auto-open the active workspace.
 ```

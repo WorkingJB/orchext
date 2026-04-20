@@ -1,0 +1,61 @@
+# Reference docker-compose for self-hosting mytex-server.
+#
+# Usage (from repo root):
+#   docker compose -f crates/mytex-server/docker-compose.yml up
+#
+# Services:
+#   - postgres: the state store.
+#   - server:   the mytex HTTP API, listening on http://localhost:8080.
+#
+# Security notes for production:
+#   - Replace `MYTEX_POSTGRES_PASSWORD` with a strong secret (compose
+#     supports .env files; an example is at .env.example).
+#   - Put a TLS-terminating reverse proxy (Caddy, Traefik) in front of
+#     the server; mytex-server itself serves plain HTTP. The compose
+#     file below intentionally omits the proxy so dev is minimal.
+#   - Persist the `postgres-data` volume on a backed-up disk.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mytex
+      POSTGRES_PASSWORD: ${MYTEX_POSTGRES_PASSWORD:-mytex-dev-password}
+      POSTGRES_DB: mytex
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mytex -d mytex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published by default so only the server container can reach it.
+    # Uncomment for local DB debugging with psql.
+    # ports:
+    #   - "5432:5432"
+
+  server:
+    build:
+      context: ../..
+      dockerfile: crates/mytex-server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mytex:${MYTEX_POSTGRES_PASSWORD:-mytex-dev-password}@postgres:5432/mytex
+      MYTEX_BIND: 0.0.0.0:8080
+      RUST_LOG: mytex_server=info,axum=info,sqlx=warn
+    ports:
+      - "8080:8080"
+    healthcheck:
+      # Use Postgres' built-in curl substitute via wget (present in the
+      # runtime image's base doesn't apply — we don't have it). The
+      # cleanest dep-free check is to shell out to the server binary's
+      # own exit semantics; for now we rely on docker's built-in TCP
+      # liveness by omitting CMD here, falling back to container-up.
+      disable: true
+
+volumes:
+  postgres-data:

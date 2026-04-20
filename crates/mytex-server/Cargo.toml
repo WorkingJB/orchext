@@ -1,0 +1,40 @@
+[package]
+name = "mytex-server"
+description = "Mytex server — HTTP API for hosted and self-hosted deployments"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "mytex-server"
+path = "src/main.rs"
+
+[dependencies]
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+
+tokio = { workspace = true, features = ["signal"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { workspace = true }
+argon2 = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+subtle = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+axum = { workspace = true, features = ["http1", "json", "tokio", "query", "matched-path"] }
+tower = { workspace = true }

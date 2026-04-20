@@ -6,6 +6,7 @@ members = [
     "crates/mytex-auth",
     "crates/mytex-audit",
     "crates/mytex-mcp",
+    "crates/mytex-server",
     "apps/desktop/src-tauri",
 ]
 
@@ -33,6 +34,11 @@ base64 = "0.22"
 subtle = "2"
 rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
 notify = { version = "6", default-features = false, features = ["macos_fsevent"] }
+axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio", "query", "matched-path"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "chrono", "uuid", "migrate"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 
 mytex-vault = { path = "crates/mytex-vault", version = "0.1.0" }
 mytex-index = { path = "crates/mytex-index", version = "0.1.0" }
