@@ -38,10 +38,6 @@ struct Fixture {
     _tmp: TempDir,
     server: Server,
     audit_path: std::path::PathBuf,
-    #[allow(dead_code)]
-    vault_root: std::path::PathBuf,
-    #[allow(dead_code)]
-    vault: Arc<dyn VaultDriver>,
 }
 
 async fn fixture(scope_labels: &[&str]) -> Fixture {
@@ -139,7 +135,7 @@ async fn fixture_with_notifier(
     let token = auth.authenticate(issued.secret.expose()).await.unwrap();
 
     let vault_arc: Arc<dyn VaultDriver> = vault;
-    let mut server = Server::new(vault_arc.clone(), index, auth, audit, token);
+    let mut server = Server::new(vault_arc, index, auth, audit, token);
     if let Some(tx) = notifier {
         server = server.with_notifier(tx);
     }
@@ -147,8 +143,6 @@ async fn fixture_with_notifier(
         _tmp: tmp,
         server,
         audit_path,
-        vault_root: root,
-        vault: vault_arc,
     }
 }
 
