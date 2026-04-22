@@ -1,6 +1,6 @@
 use chrono::Duration;
-use mytex_auth::{AuthError, IssueRequest, Limits, Mode, Scope, TokenService};
-use mytex_vault::Visibility;
+use ourtex_auth::{AuthError, IssueRequest, Limits, Mode, Scope, TokenService};
+use ourtex_vault::Visibility;
 use tempfile::TempDir;
 
 fn request(labels: &[&str]) -> IssueRequest {
@@ -37,7 +37,7 @@ async fn wrong_secret_rejected() {
         .await
         .unwrap();
     let _ = svc.issue(request(&["work"])).await.unwrap();
-    let err = svc.authenticate("mtx_not-the-real-secret").await.unwrap_err();
+    let err = svc.authenticate("otx_not-the-real-secret").await.unwrap_err();
     assert!(matches!(err, AuthError::UnknownToken));
 }
 
@@ -47,7 +47,7 @@ async fn malformed_secret_rejected() {
     let svc = TokenService::open(tmp.path().join("tokens.json"))
         .await
         .unwrap();
-    let err = svc.authenticate("not-a-mytex-token").await.unwrap_err();
+    let err = svc.authenticate("not-a-ourtex-token").await.unwrap_err();
     assert!(matches!(err, AuthError::InvalidSecret));
 }
 

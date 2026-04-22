@@ -1,6 +1,6 @@
 //! Server configuration, read from environment variables at startup.
 //!
-//! Only two env vars are required: `DATABASE_URL` and `MYTEX_BIND`.
+//! Only two env vars are required: `DATABASE_URL` and `OURTEX_BIND`.
 //! Everything else has a reasonable default so `docker compose up`
 //! works on first boot.
 
@@ -17,8 +17,8 @@ impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
         let database_url = env::var("DATABASE_URL")
             .map_err(|_| ConfigError::Missing("DATABASE_URL"))?;
-        let bind = env::var("MYTEX_BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
-        let db_max_connections = env::var("MYTEX_DB_MAX_CONNECTIONS")
+        let bind = env::var("OURTEX_BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
+        let db_max_connections = env::var("OURTEX_DB_MAX_CONNECTIONS")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(10);

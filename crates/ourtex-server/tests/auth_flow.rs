@@ -6,7 +6,7 @@
 //! require Postgres to be reachable via `DATABASE_URL` (or whatever
 //! sqlx's test harness resolves via `.env` / env vars).
 //!
-//! If Postgres is not available, running `cargo test -p mytex-server`
+//! If Postgres is not available, running `cargo test -p ourtex-server`
 //! will still pass because these tests are in a separate integration
 //! test target that `sqlx` simply won't execute without a DB — each
 //! `#[sqlx::test]` function connects at test start and errors cleanly.
@@ -15,7 +15,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use mytex_server::{router, AppState};
+use ourtex_server::{router, AppState};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt; // for `oneshot`
@@ -50,7 +50,7 @@ async fn signup_then_me_roundtrip(db: PgPool) {
     assert_eq!(resp.status(), StatusCode::CREATED);
     let body: Value = read_json(resp.into_body()).await;
     let secret = body["session"]["secret"].as_str().unwrap().to_string();
-    assert!(secret.starts_with("mtx_"));
+    assert!(secret.starts_with("otx_"));
     let account_id = body["account"]["id"].as_str().unwrap().to_string();
 
     // Me with bearer — should return the same account.
@@ -105,7 +105,7 @@ async fn login_after_signup_succeeds(db: PgPool) {
     assert_eq!(resp.status(), StatusCode::OK);
     let body: Value = read_json(resp.into_body()).await;
     let secret = body["session"]["secret"].as_str().unwrap();
-    assert!(secret.starts_with("mtx_"));
+    assert!(secret.starts_with("otx_"));
 }
 
 #[sqlx::test(migrations = "./migrations")]

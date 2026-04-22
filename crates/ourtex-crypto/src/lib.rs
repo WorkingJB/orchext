@@ -1,4 +1,4 @@
-//! Passphrase KDF + AEAD primitives powering Mytex's at-rest
+//! Passphrase KDF + AEAD primitives powering Ourtex's at-rest
 //! encryption (Phase 2b.3). Key hierarchy:
 //!
 //! ```text

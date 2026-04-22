@@ -2,7 +2,7 @@
 
 Turn the desktop app into something a non-developer can install.
 Today's only install path is `cargo tauri build` locally, which
-blocks anyone without a Rust toolchain from trying Mytex. Deferred
+blocks anyone without a Rust toolchain from trying Ourtex. Deferred
 behind the web client (Phase 2b.4) because a shareable URL covers
 most of the "just let me try it" need without a signing cert.
 
@@ -89,7 +89,7 @@ Live status in [`../implementation-status.md`](../implementation-status.md).
 
 ### 3.5 — Download landing page (optional)
 
-- Static page (e.g., `mytex.app/download`) with OS-detection and
+- Static page (e.g., `ourtex.app/download`) with OS-detection and
   a "Download for macOS/Windows/Linux" button pointing at the
   latest GitHub Release asset.
 - **Cut unless needed:** GitHub Releases is a fine download URL
@@ -108,6 +108,6 @@ Live status in [`../implementation-status.md`](../implementation-status.md).
 - **Crash reporting / telemetry** — off by default, opt-in only
   (matches the self-host-first positioning). Sentry vs. a custom
   endpoint is a 3.4+ question.
-- **Homebrew cask** — would let `brew install --cask mytex` work.
+- **Homebrew cask** — would let `brew install --cask ourtex` work.
   Easy to publish once 3.1 produces a signed DMG; add when there's
   demand.

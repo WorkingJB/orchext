@@ -2,7 +2,7 @@ use crate::rpc::RpcError;
 use serde_json::json;
 use thiserror::Error;
 
-/// Mytex MCP error codes, per `MCP.md` §7.
+/// Ourtex MCP error codes, per `MCP.md` §7.
 ///
 /// `not_authorized` is deliberately ambiguous: out-of-scope, missing, and
 /// revoked-direct-access all map to it so the error itself cannot be used
@@ -34,7 +34,7 @@ pub enum McpError {
     ProposalsDisabled,
 
     /// Standard JSON-RPC parse / method-not-found errors, used before the
-    /// Mytex-specific code range applies.
+    /// Ourtex-specific code range applies.
     #[error("method not found: {0}")]
     MethodNotFound(String),
 

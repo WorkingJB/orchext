@@ -212,9 +212,9 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             header::AUTHORIZATION,
-            "Bearer mtx_example".parse().unwrap(),
+            "Bearer otx_example".parse().unwrap(),
         );
-        assert_eq!(bearer_from_headers(&h).as_deref(), Some("mtx_example"));
+        assert_eq!(bearer_from_headers(&h).as_deref(), Some("otx_example"));
     }
 
     #[test]
@@ -222,9 +222,9 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             header::AUTHORIZATION,
-            "bearer mtx_example".parse().unwrap(),
+            "bearer otx_example".parse().unwrap(),
         );
-        assert_eq!(bearer_from_headers(&h).as_deref(), Some("mtx_example"));
+        assert_eq!(bearer_from_headers(&h).as_deref(), Some("otx_example"));
     }
 
     #[test]

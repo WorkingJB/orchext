@@ -1,4 +1,4 @@
-//! Per-vault settings stored in `.mytex/settings.json`.
+//! Per-vault settings stored in `.ourtex/settings.json`.
 //!
 //! Today this only holds the Anthropic API key for the onboarding
 //! agent. It lives alongside `tokens.json` and `audit.jsonl` so a
@@ -34,7 +34,7 @@ pub async fn save(root: &Path, settings: &Settings) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
-            .map_err(|e| format!("create .mytex: {e}"))?;
+            .map_err(|e| format!("create .ourtex: {e}"))?;
     }
     let bytes = serde_json::to_vec_pretty(settings)
         .map_err(|e| format!("encode settings: {e}"))?;
@@ -49,5 +49,5 @@ pub async fn save(root: &Path, settings: &Settings) -> Result<(), String> {
 }
 
 fn settings_path(root: &Path) -> std::path::PathBuf {
-    root.join(".mytex").join("settings.json")
+    root.join(".ourtex").join("settings.json")
 }

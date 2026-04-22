@@ -9,7 +9,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use mytex_server::{router, AppState};
+use ourtex_server::{router, AppState};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -119,7 +119,7 @@ async fn vault_write_read_roundtrip(db: PgPool) {
     assert_eq!(read.status(), StatusCode::OK);
     let body = read_json(read.into_body()).await;
     let source = body["source"].as_str().unwrap();
-    let parsed = mytex_vault::Document::parse(source).unwrap();
+    let parsed = ourtex_vault::Document::parse(source).unwrap();
     assert_eq!(parsed.frontmatter.id.as_str(), "rel-jane-smith");
     assert_eq!(parsed.frontmatter.tags, vec!["manager", "acme"]);
 }
@@ -379,7 +379,7 @@ async fn tokens_issue_and_revoke(db: PgPool) {
     assert_eq!(issue.status(), StatusCode::CREATED);
     let body = read_json(issue.into_body()).await;
     let token_id = body["token"]["id"].as_str().unwrap().to_string();
-    assert!(body["secret"].as_str().unwrap().starts_with("mtx_"));
+    assert!(body["secret"].as_str().unwrap().starts_with("otx_"));
 
     // List contains it.
     let list = app

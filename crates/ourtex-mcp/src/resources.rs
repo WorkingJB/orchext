@@ -1,8 +1,8 @@
 use crate::error::{McpError, Result};
 
-pub const SCHEME_PREFIX: &str = "mytex://vault/";
+pub const SCHEME_PREFIX: &str = "ourtex://vault/";
 
-/// What a `mytex://vault/...` URI points at.
+/// What a `ourtex://vault/...` URI points at.
 pub enum Parsed {
     Root,
     Type(String),
@@ -10,13 +10,13 @@ pub enum Parsed {
 }
 
 pub fn parse_uri(uri: &str) -> Result<Parsed> {
-    // Accept `mytex://vault` and `mytex://vault/` as equivalent roots.
-    if uri == "mytex://vault" || uri == SCHEME_PREFIX {
+    // Accept `ourtex://vault` and `ourtex://vault/` as equivalent roots.
+    if uri == "ourtex://vault" || uri == SCHEME_PREFIX {
         return Ok(Parsed::Root);
     }
     let rest = uri
         .strip_prefix(SCHEME_PREFIX)
-        .ok_or_else(|| McpError::InvalidArgument(format!("not a mytex vault URI: {uri}")))?;
+        .ok_or_else(|| McpError::InvalidArgument(format!("not a ourtex vault URI: {uri}")))?;
 
     if rest.is_empty() {
         return Ok(Parsed::Root);
@@ -33,17 +33,17 @@ pub fn parse_uri(uri: &str) -> Result<Parsed> {
             id: (*id).to_string(),
         }),
         _ => Err(McpError::InvalidArgument(format!(
-            "malformed mytex vault URI: {uri}"
+            "malformed ourtex vault URI: {uri}"
         ))),
     }
 }
 
 pub mod resource_definitions {
-    use mytex_vault::{Document, Entry};
+    use ourtex_vault::{Document, Entry};
     use serde_json::{json, Value};
 
     pub fn document(entry: &Entry, doc: &Document) -> Value {
-        let uri = format!("mytex://vault/{}/{}", entry.type_, entry.id);
+        let uri = format!("ourtex://vault/{}/{}", entry.type_, entry.id);
         let title = crate::title::derive_title(&doc.body, entry.id.as_str());
         json!({
             "uri": uri,
@@ -60,13 +60,13 @@ mod tests {
 
     #[test]
     fn parses_root() {
-        assert!(matches!(parse_uri("mytex://vault/").unwrap(), Parsed::Root));
-        assert!(matches!(parse_uri("mytex://vault").unwrap(), Parsed::Root));
+        assert!(matches!(parse_uri("ourtex://vault/").unwrap(), Parsed::Root));
+        assert!(matches!(parse_uri("ourtex://vault").unwrap(), Parsed::Root));
     }
 
     #[test]
     fn parses_type_listing() {
-        match parse_uri("mytex://vault/relationships/").unwrap() {
+        match parse_uri("ourtex://vault/relationships/").unwrap() {
             Parsed::Type(t) => assert_eq!(t, "relationships"),
             _ => panic!("expected Type"),
         }
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn parses_document() {
-        match parse_uri("mytex://vault/relationships/rel-jane").unwrap() {
+        match parse_uri("ourtex://vault/relationships/rel-jane").unwrap() {
             Parsed::Document { type_, id } => {
                 assert_eq!(type_, "relationships");
                 assert_eq!(id, "rel-jane");

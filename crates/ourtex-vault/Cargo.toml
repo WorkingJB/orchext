@@ -1,6 +1,6 @@
 [package]
-name = "mytex-vault"
-description = "Mytex vault format parser and storage drivers"
+name = "ourtex-vault"
+description = "Ourtex vault format parser and storage drivers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

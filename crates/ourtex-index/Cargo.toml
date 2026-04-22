@@ -1,6 +1,6 @@
 [package]
-name = "mytex-index"
-description = "Mytex search and graph index"
+name = "ourtex-index"
+description = "Ourtex search and graph index"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-mytex-vault = { workspace = true }
+ourtex-vault = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

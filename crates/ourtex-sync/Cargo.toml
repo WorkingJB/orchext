@@ -1,6 +1,6 @@
 [package]
-name = "mytex-sync"
-description = "Client-side sync: RemoteVaultDriver + helpers for talking to mytex-server"
+name = "ourtex-sync"
+description = "Client-side sync: RemoteVaultDriver + helpers for talking to ourtex-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,8 +11,8 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-mytex-vault = { workspace = true }
-mytex-crypto = { workspace = true }
+ourtex-vault = { workspace = true }
+ourtex-crypto = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
 tokio = { workspace = true }

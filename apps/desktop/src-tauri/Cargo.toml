@@ -1,6 +1,6 @@
 [package]
-name = "mytex-desktop"
-description = "Mytex desktop management app"
+name = "ourtex-desktop"
+description = "Ourtex desktop management app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,23 +8,23 @@ rust-version.workspace = true
 repository.workspace = true
 
 [lib]
-name = "mytex_desktop_lib"
+name = "ourtex_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "mytex-desktop"
+name = "ourtex-desktop"
 path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-mytex-vault = { workspace = true }
-mytex-index = { workspace = true }
-mytex-auth = { workspace = true }
-mytex-audit = { workspace = true }
-mytex-sync = { workspace = true }
-mytex-crypto = { workspace = true }
+ourtex-vault = { workspace = true }
+ourtex-index = { workspace = true }
+ourtex-auth = { workspace = true }
+ourtex-audit = { workspace = true }
+ourtex-sync = { workspace = true }
+ourtex-crypto = { workspace = true }
 uuid = { workspace = true }
 url = { workspace = true }
 

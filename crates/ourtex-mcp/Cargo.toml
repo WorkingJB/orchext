@@ -1,6 +1,6 @@
 [package]
-name = "mytex-mcp"
-description = "Mytex MCP server"
+name = "ourtex-mcp"
+description = "Ourtex MCP server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,14 +11,14 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [[bin]]
-name = "mytex-mcp"
+name = "ourtex-mcp"
 path = "src/main.rs"
 
 [dependencies]
-mytex-vault = { workspace = true }
-mytex-index = { workspace = true }
-mytex-auth = { workspace = true }
-mytex-audit = { workspace = true }
+ourtex-vault = { workspace = true }
+ourtex-index = { workspace = true }
+ourtex-auth = { workspace = true }
+ourtex-audit = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

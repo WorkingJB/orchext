@@ -1,4 +1,4 @@
-//! Mytex server — HTTP API.
+//! Ourtex server — HTTP API.
 //!
 //! Phase 2b.1 shipped user auth (`/v1/auth/*`). Phase 2b.2 adds the
 //! tenant-scoped vault + index + tokens + audit surface under

@@ -36,7 +36,7 @@ impl PlainFileDriver {
 }
 
 fn is_hidden_or_reserved(name: &str) -> bool {
-    // Skip `.mytex/`, `.git/`, and anything else that starts with `.`.
+    // Skip `.ourtex/`, `.git/`, and anything else that starts with `.`.
     // FORMAT.md §1: seed and custom types are non-hidden top-level directories.
     name.starts_with('.')
 }

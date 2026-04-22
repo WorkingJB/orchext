@@ -8,7 +8,7 @@
 //! subscribed clients re-read fresh data.
 
 use crate::server::Server;
-use mytex_vault::DocumentId;
+use ourtex_vault::DocumentId;
 use notify::event::EventKind;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
@@ -29,7 +29,7 @@ pub fn spawn(vault_root: PathBuf, server: Arc<Server>) -> Result<WatcherHandle, 
     let runtime = Handle::current();
     let root = vault_root;
     std::thread::Builder::new()
-        .name("mytex-mcp-watch".into())
+        .name("ourtex-mcp-watch".into())
         .spawn(move || {
             while let Ok(res) = rx.recv() {
                 match res {
@@ -80,7 +80,7 @@ async fn apply_and_notify(server: &Server, type_: &str, id: &str) {
         }
     }
 
-    let uri = format!("mytex://vault/{}/{}", type_, id);
+    let uri = format!("ourtex://vault/{}/{}", type_, id);
     server.emit_resource_updated(&uri);
 }
 
@@ -94,7 +94,7 @@ fn is_relevant_kind(kind: &EventKind) -> bool {
 /// Map a filesystem path under the vault root to a `(type, id)` pair,
 /// or `None` if the path isn't a document we care about.
 ///
-/// Valid shape: `<root>/<type>/<id>.md`. Anything under `.mytex/`, a
+/// Valid shape: `<root>/<type>/<id>.md`. Anything under `.ourtex/`, a
 /// dotfile, or deeper nesting is ignored — this matches `PlainFileDriver`
 /// rules so the index stays in sync with what `list()` returns.
 fn classify(root: &Path, path: &Path) -> Option<(String, String)> {
@@ -129,9 +129,9 @@ mod tests {
     }
 
     #[test]
-    fn skips_dot_mytex() {
+    fn skips_dot_ourtex() {
         let root = Path::new("/vault");
-        assert!(classify(root, Path::new("/vault/.mytex/audit.jsonl")).is_none());
+        assert!(classify(root, Path::new("/vault/.ourtex/audit.jsonl")).is_none());
     }
 
     #[test]

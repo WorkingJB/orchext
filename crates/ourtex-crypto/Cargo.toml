@@ -1,5 +1,5 @@
 [package]
-name = "mytex-crypto"
+name = "ourtex-crypto"
 description = "Passphrase KDF + AEAD primitives for at-rest encryption"
 version.workspace = true
 edition.workspace = true

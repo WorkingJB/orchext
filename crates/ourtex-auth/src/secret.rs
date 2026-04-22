@@ -3,7 +3,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use rand::RngCore;
 
-pub const SECRET_PREFIX: &str = "mtx_";
+pub const SECRET_PREFIX: &str = "otx_";
 const SECRET_RANDOM_BYTES: usize = 32;
 
 /// A freshly minted or presented token secret. Never logged. Never persisted
@@ -53,14 +53,14 @@ mod tests {
 
     #[test]
     fn parses_well_formed_secrets() {
-        assert!(TokenSecret::from_str("mtx_abc123").is_ok());
+        assert!(TokenSecret::from_str("otx_abc123").is_ok());
     }
 
     #[test]
     fn rejects_malformed_secrets() {
         assert!(TokenSecret::from_str("").is_err());
         assert!(TokenSecret::from_str("abc").is_err());
-        assert!(TokenSecret::from_str("mtx_").is_err());
+        assert!(TokenSecret::from_str("otx_").is_err());
     }
 
     #[test]

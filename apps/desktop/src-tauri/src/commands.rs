@@ -1,5 +1,5 @@
 //! Tauri commands invoked by the frontend. Each is a thin wrapper
-//! around the mytex-* crates, returning serde-serializable DTOs so
+//! around the ourtex-* crates, returning serde-serializable DTOs so
 //! the UI doesn't need to know about internal types.
 
 use crate::onboarding::{self, ChatMessage, SeedDocDraft};
@@ -8,13 +8,13 @@ use crate::state::{self, AppState, HeartbeatHandle};
 use crate::watch;
 use crate::workspaces::WorkspaceEntry;
 use chrono::{DateTime, Duration, Utc};
-use mytex_audit::{verify, AuditEntry, Iter as AuditIter};
-use mytex_auth::{IssueRequest, Mode, Scope};
-use mytex_crypto::{
+use ourtex_audit::{verify, AuditEntry, Iter as AuditIter};
+use ourtex_auth::{IssueRequest, Mode, Scope};
+use ourtex_crypto::{
     derive_master_key, unwrap_content_key, wrap_content_key, ContentKey, Salt, SealedBlob,
 };
-use mytex_sync::{list_tenants, login, LoginInput};
-use mytex_vault::{Document, DocumentId, Frontmatter, Visibility};
+use ourtex_sync::{list_tenants, login, LoginInput};
+use ourtex_vault::{Document, DocumentId, Frontmatter, Visibility};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -127,7 +127,7 @@ pub struct ConnectRemoteInput {
     pub tenant_id: Option<uuid::Uuid>,
 }
 
-/// Log into a remote `mytex-server`, pick a tenant, register the
+/// Log into a remote `ourtex-server`, pick a tenant, register the
 /// workspace, and activate it. Persists the returned session token in
 /// the local registry so subsequent activations don't prompt.
 #[tauri::command]
@@ -147,7 +147,7 @@ pub async fn workspace_connect_remote(
         &LoginInput {
             email: input.email.trim().to_lowercase(),
             password: input.password.clone(),
-            label: Some("mytex-desktop".into()),
+            label: Some("ourtex-desktop".into()),
         },
     )
     .await
@@ -174,7 +174,7 @@ pub async fn workspace_connect_remote(
     };
 
     // 3. pick cache root + register. Cache root is
-    //    `<home>/.mytex/remote/<workspace_id>/` — chosen below after
+    //    `<home>/.ourtex/remote/<workspace_id>/` — chosen below after
     //    `add_remote` generates the id.
     let name = input.name.unwrap_or_else(|| {
         format!(
@@ -185,7 +185,7 @@ pub async fn workspace_connect_remote(
     });
 
     let home = dirs_home();
-    let remote_base = home.join(".mytex").join("remote");
+    let remote_base = home.join(".ourtex").join("remote");
     tokio::fs::create_dir_all(&remote_base)
         .await
         .map_err(|e| format!("create remote cache root: {e}"))?;
@@ -210,7 +210,7 @@ pub async fn workspace_connect_remote(
         })
         .await?;
 
-    // Rewrite the cache path to `~/.mytex/remote/<id>/`. Persist.
+    // Rewrite the cache path to `~/.ourtex/remote/<id>/`. Persist.
     state
         .mutate_registry(|reg| {
             if let Some(w) = reg.workspaces.iter_mut().find(|w| w.id == id) {
@@ -874,7 +874,7 @@ pub async fn audit_list(
 ) -> Result<AuditPage, String> {
     let svcs = state.active_services().await?;
     svcs.require_local("audit log")?;
-    let path = svcs.root.join(".mytex/audit.jsonl");
+    let path = svcs.root.join(".ourtex/audit.jsonl");
     if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
         return Ok(AuditPage {
             entries: vec![],
@@ -920,7 +920,7 @@ fn title_from_body(body: &str, fallback_id: &str) -> String {
     fallback_id.to_string()
 }
 
-fn public_to_info(t: &mytex_auth::PublicTokenInfo) -> TokenInfo {
+fn public_to_info(t: &ourtex_auth::PublicTokenInfo) -> TokenInfo {
     TokenInfo {
         id: t.id.clone(),
         label: t.label.clone(),

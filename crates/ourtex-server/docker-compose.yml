@@ -1,17 +1,17 @@
-# Reference docker-compose for self-hosting mytex-server.
+# Reference docker-compose for self-hosting ourtex-server.
 #
 # Usage (from repo root):
-#   docker compose -f crates/mytex-server/docker-compose.yml up
+#   docker compose -f crates/ourtex-server/docker-compose.yml up
 #
 # Services:
 #   - postgres: the state store.
-#   - server:   the mytex HTTP API, listening on http://localhost:8080.
+#   - server:   the ourtex HTTP API, listening on http://localhost:8080.
 #
 # Security notes for production:
-#   - Replace `MYTEX_POSTGRES_PASSWORD` with a strong secret (compose
+#   - Replace `OURTEX_POSTGRES_PASSWORD` with a strong secret (compose
 #     supports .env files; an example is at .env.example).
 #   - Put a TLS-terminating reverse proxy (Caddy, Traefik) in front of
-#     the server; mytex-server itself serves plain HTTP. The compose
+#     the server; ourtex-server itself serves plain HTTP. The compose
 #     file below intentionally omits the proxy so dev is minimal.
 #   - Persist the `postgres-data` volume on a backed-up disk.
 
@@ -20,13 +20,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: mytex
-      POSTGRES_PASSWORD: ${MYTEX_POSTGRES_PASSWORD:-mytex-dev-password}
-      POSTGRES_DB: mytex
+      POSTGRES_USER: ourtex
+      POSTGRES_PASSWORD: ${OURTEX_POSTGRES_PASSWORD:-ourtex-dev-password}
+      POSTGRES_DB: ourtex
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mytex -d mytex"]
+      test: ["CMD-SHELL", "pg_isready -U ourtex -d ourtex"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -38,15 +38,15 @@ services:
   server:
     build:
       context: ../..
-      dockerfile: crates/mytex-server/Dockerfile
+      dockerfile: crates/ourtex-server/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://mytex:${MYTEX_POSTGRES_PASSWORD:-mytex-dev-password}@postgres:5432/mytex
-      MYTEX_BIND: 0.0.0.0:8080
-      RUST_LOG: mytex_server=info,axum=info,sqlx=warn
+      DATABASE_URL: postgres://ourtex:${OURTEX_POSTGRES_PASSWORD:-ourtex-dev-password}@postgres:5432/ourtex
+      OURTEX_BIND: 0.0.0.0:8080
+      RUST_LOG: ourtex_server=info,axum=info,sqlx=warn
     ports:
       - "8080:8080"
     healthcheck:

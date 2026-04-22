@@ -24,7 +24,7 @@ use axum::{
     Extension, Json, Router,
 };
 use chrono::{DateTime, Utc};
-use mytex_crypto::ContentKey;
+use ourtex_crypto::ContentKey;
 use serde::{Deserialize, Serialize};
 
 pub fn router() -> Router<AppState> {
@@ -106,9 +106,9 @@ async fn init_crypto(
     }
     // Validate wire shapes before we touch the DB — a malformed
     // salt / wrapped blob from the client should 400, not 500.
-    let _ = mytex_crypto::Salt::from_wire(&req.kdf_salt)
+    let _ = ourtex_crypto::Salt::from_wire(&req.kdf_salt)
         .map_err(|e| ApiError::InvalidArgument(format!("kdf_salt: {e}")))?;
-    let _ = mytex_crypto::SealedBlob::from_wire(&req.wrapped_content_key)
+    let _ = ourtex_crypto::SealedBlob::from_wire(&req.wrapped_content_key)
         .map_err(|e| ApiError::InvalidArgument(format!("wrapped_content_key: {e}")))?;
 
     // UPDATE ... WHERE kdf_salt IS NULL makes init idempotent-forbidden:

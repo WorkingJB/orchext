@@ -1,7 +1,7 @@
-//! Client-side sync for `mytex-server`.
+//! Client-side sync for `ourtex-server`.
 //!
 //! Exposes a `VaultDriver`-compatible `RemoteVaultDriver` so every
-//! existing caller of the trait — including `mytex-index::Index::
+//! existing caller of the trait — including `ourtex-index::Index::
 //! reindex_from` and the desktop's Tauri commands — works unchanged
 //! against a remote workspace. The typical open-workspace sequence
 //! mirrors the local path:

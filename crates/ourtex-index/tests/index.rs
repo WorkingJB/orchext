@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
-use mytex_index::{Index, ListFilter, SearchQuery};
-use mytex_vault::{Document, DocumentId, Frontmatter, PlainFileDriver, VaultDriver, Visibility};
+use ourtex_index::{Index, ListFilter, SearchQuery};
+use ourtex_vault::{Document, DocumentId, Frontmatter, PlainFileDriver, VaultDriver, Visibility};
 use std::collections::BTreeMap;
 use tempfile::TempDir;
 
@@ -88,7 +88,7 @@ async fn reindex_from_vault_and_search() {
         .await
         .unwrap();
 
-    let idx_path = tmp.path().join(".mytex").join("index.sqlite");
+    let idx_path = tmp.path().join(".ourtex").join("index.sqlite");
     let idx = Index::open(&idx_path).await.unwrap();
     let stats = idx.reindex_from(&vault).await.unwrap();
     assert_eq!(stats.documents, 3);

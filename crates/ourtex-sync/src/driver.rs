@@ -1,12 +1,12 @@
-//! `VaultDriver` impl that goes over HTTP to `mytex-server`.
+//! `VaultDriver` impl that goes over HTTP to `ourtex-server`.
 //!
 //! Same trait, same semantics, different backing store — every local
-//! caller of `VaultDriver` (including `mytex-index::Index::reindex_from`
+//! caller of `VaultDriver` (including `ourtex-index::Index::reindex_from`
 //! and the desktop's existing Tauri commands) works unchanged against a
 //! `RemoteVaultDriver`.
 //!
 //! There is no client-side cache here: the common call pattern is
-//! "reindex once into a local `mytex-index::Index`, then serve reads
+//! "reindex once into a local `ourtex-index::Index`, then serve reads
 //! out of that index," so list/read aren't hot paths once the workspace
 //! is open. If that assumption changes, a short-TTL `list` cache slots
 //! in cleanly at this layer.
@@ -16,7 +16,7 @@ use crate::{
     error::{Result, SyncError},
 };
 use async_trait::async_trait;
-use mytex_vault::{Document, DocumentId, Entry, Result as VaultResult, VaultDriver, VaultError};
+use ourtex_vault::{Document, DocumentId, Entry, Result as VaultResult, VaultDriver, VaultError};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -146,7 +146,7 @@ impl VaultDriver for RemoteVaultDriver {
                 type_: e.type_.clone(),
                 // Synthetic path; the `VaultDriver` contract doesn't
                 // require the path to exist on disk and downstream code
-                // (mytex-index's reindex) only touches id + type_.
+                // (ourtex-index's reindex) only touches id + type_.
                 path: PathBuf::from(format!("remote://{}/{}.md", e.type_, e.doc_id)),
             });
         }

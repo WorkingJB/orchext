@@ -1,6 +1,6 @@
 //! Argon2id password hashing.
 //!
-//! Matches `mytex-auth`'s approach for token secrets (D15): Argon2id
+//! Matches `ourtex-auth`'s approach for token secrets (D15): Argon2id
 //! with per-entry random salt, storing only the encoded hash. Verify
 //! is constant-time inside `argon2`'s implementation.
 

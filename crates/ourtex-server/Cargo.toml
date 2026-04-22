@@ -1,6 +1,6 @@
 [package]
-name = "mytex-server"
-description = "Mytex server — HTTP API for hosted and self-hosted deployments"
+name = "ourtex-server"
+description = "Ourtex server — HTTP API for hosted and self-hosted deployments"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,7 +11,7 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [[bin]]
-name = "mytex-server"
+name = "ourtex-server"
 path = "src/main.rs"
 
 [dependencies]
@@ -34,8 +34,8 @@ base64 = { workspace = true }
 subtle = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
-mytex-vault = { workspace = true }
-mytex-crypto = { workspace = true }
+ourtex-vault = { workspace = true }
+ourtex-crypto = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

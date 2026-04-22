@@ -7,17 +7,17 @@ use crate::tools::{
     SearchOutput, SearchResultHit, TOOL_GET, TOOL_LIST, TOOL_SEARCH,
 };
 use chrono::Utc;
-use mytex_audit::{Actor, AuditRecord, AuditWriter, Outcome};
-use mytex_auth::{AuthenticatedToken, TokenService};
-use mytex_index::{Index, ListFilter, SearchQuery};
-use mytex_vault::{DocumentId, VaultDriver, Visibility};
+use ourtex_audit::{Actor, AuditRecord, AuditWriter, Outcome};
+use ourtex_auth::{AuthenticatedToken, TokenService};
+use ourtex_index::{Index, ListFilter, SearchQuery};
+use ourtex_vault::{DocumentId, VaultDriver, Visibility};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
-pub const SERVER_NAME: &str = "mytex";
+pub const SERVER_NAME: &str = "ourtex";
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const MAX_QUERY_LEN: usize = 512;
@@ -29,12 +29,12 @@ const HARD_LIMIT: u32 = 100;
 /// it proactively." Kept short so clients that surface instructions in a
 /// system-prompt slot don't blow their context budget.
 const SERVER_INSTRUCTIONS: &str = "\
-Mytex stores the user's own context about themselves — their \
+Ourtex stores the user's own context about themselves — their \
 preferences, relationships, goals, roles, decisions, and notes they \
 have written. Treat it as authoritative for questions where the user \
 is the subject.
 
-When to consult Mytex:
+When to consult Ourtex:
 - Before answering questions like \"what do I prefer…\", \"how do I \
   usually…\", \"who is X\", \"what are my goals\", \"what did we \
   decide about Y\" — search first, then answer from what you find.
@@ -454,7 +454,7 @@ impl Server {
                 for entry in entries {
                     if let Ok(doc) = self.vault.read(&entry.id).await {
                         if is_visible(&doc.frontmatter.visibility, &allowed) {
-                            lines.push(format!("mytex://vault/{}/{}", type_, entry.id));
+                            lines.push(format!("ourtex://vault/{}/{}", type_, entry.id));
                         }
                     }
                 }
@@ -515,7 +515,7 @@ impl Server {
     }
 
     /// Fire a `notifications/resources/updated` message if the given URI
-    /// (or a broader subscribed prefix like `mytex://vault/<type>/`) is
+    /// (or a broader subscribed prefix like `ourtex://vault/<type>/`) is
     /// subscribed. Called by the fs watcher; no-op if no notifier is
     /// attached or no subscription matches.
     pub fn emit_resource_updated(&self, uri: &str) {
@@ -603,15 +603,15 @@ fn is_rate_limited_method(method: &str) -> bool {
 }
 
 /// True if `sub` is a subscription that covers `uri`. A subscription to
-/// `mytex://vault/<type>/<id>` matches only that exact URI; a trailing-
-/// slash form like `mytex://vault/<type>/` matches any document of that
-/// type; `mytex://vault/` (or `mytex://vault`) matches everything.
+/// `ourtex://vault/<type>/<id>` matches only that exact URI; a trailing-
+/// slash form like `ourtex://vault/<type>/` matches any document of that
+/// type; `ourtex://vault/` (or `ourtex://vault`) matches everything.
 fn uri_matches_sub(uri: &str, sub: &str) -> bool {
     if sub == uri {
         return true;
     }
-    if sub == "mytex://vault/" || sub == "mytex://vault" {
-        return uri.starts_with("mytex://vault/");
+    if sub == "ourtex://vault/" || sub == "ourtex://vault" {
+        return uri.starts_with("ourtex://vault/");
     }
     if let Some(prefix) = sub.strip_suffix('/') {
         // Type-level subscription: match any doc directly inside this type.

@@ -1,6 +1,6 @@
 # Phase 2b.3 — Encryption at rest + session-bound decryption (shipped)
 
-Shipped 2026-04-19. New `mytex-crypto` crate (Argon2id KDF +
+Shipped 2026-04-19. New `ourtex-crypto` crate (Argon2id KDF +
 XChaCha20-Poly1305 AEAD); server gains `/vault/crypto`,
 `/vault/init-crypto`, and `/session-key` endpoints plus encrypted
 `documents.body_ciphertext`; desktop gains unlock/lock commands with a
@@ -10,7 +10,7 @@ XChaCha20-Poly1305 AEAD); server gains `/vault/crypto`,
 
 ---
 
-### `mytex-crypto` — 2026-04-19 (new, Phase 2b.3)
+### `ourtex-crypto` — 2026-04-19 (new, Phase 2b.3)
 
 Passphrase KDF + AEAD primitives. Intentionally minimal — the crate
 exposes only what the client/server need to cooperate on
@@ -39,8 +39,8 @@ session-bound decryption.
 - **XChaCha20-Poly1305 over plain ChaCha20-Poly1305.** 192-bit nonce
   is long enough to pick at random per encryption without a counter
   table. Removes an entire class of operational footguns.
-- **Argon2id `default()` profile.** Same as `mytex-server`'s
-  password hashing and `mytex-auth`'s token hashing — one parameter
+- **Argon2id `default()` profile.** Same as `ourtex-server`'s
+  password hashing and `ourtex-auth`'s token hashing — one parameter
   set across the workspace, easy to bump in one place.
 - **`CryptoError::Open` collapses every decryption failure.** Wrong
   key, tampered ciphertext, truncated nonce, and bad base64 all map
@@ -57,7 +57,7 @@ session-bound decryption.
   targets. 2b.4 will add a `wasm` feature that strips `tokio` /
   `rand::thread_rng()` for a browser build.
 
-### `mytex-server` — 2026-04-19 (Phase 2b.3 delta)
+### `ourtex-server` — 2026-04-19 (Phase 2b.3 delta)
 
 Adds at-rest encryption to the vault endpoints, server-side
 session-key store, and four new control-plane routes. Encryption is
@@ -146,7 +146,7 @@ server-side; reads decrypt if the session key is live, else
 - `plaintext_legacy_rows_still_readable` — unseeded tenants continue
   to operate in plaintext mode; 2b.2 rows are unchanged.
 
-### `mytex-sync` — 2026-04-19 (Phase 2b.3 delta)
+### `ourtex-sync` — 2026-04-19 (Phase 2b.3 delta)
 
 Adds control-plane wrappers for the four new server endpoints. No
 data-path changes — reads/writes go through the existing
@@ -160,16 +160,16 @@ based on whether the session key is live.
   TTL on every call; heartbeat-friendly.
 - `RemoteClient::revoke_session_key()`.
 
-New workspace dep: `mytex-crypto`.
+New workspace dep: `ourtex-crypto`.
 
-### `mytex-desktop` — 2026-04-19 (Phase 2b.3 delta)
+### `ourtex-desktop` — 2026-04-19 (Phase 2b.3 delta)
 
 Unlock / lock flow for remote workspaces.
 
 **New Tauri commands:**
 
 - `workspace_unlock(passphrase)` — derives the master key via
-  `mytex-crypto::derive_master_key`, fetches the server's crypto
+  `ourtex-crypto::derive_master_key`, fetches the server's crypto
   state, and either (a) seeds crypto for a fresh tenant or (b)
   unwraps the stored content key with the master. Publishes the
   content key, spawns a heartbeat task, and runs a full

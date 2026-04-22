@@ -1,11 +1,11 @@
-# Mytex MCP Server (v0.1)
+# Ourtex MCP Server (v0.1)
 
 This document specifies the Model Context Protocol (MCP) surface that
-Mytex exposes to AI agents. It is the contract between the Mytex core
+Ourtex exposes to AI agents. It is the contract between the Ourtex core
 and any MCP client — Claude Desktop, an IDE plugin, a CLI agent, or a
 future third-party tool.
 
-The goal is the one from the slogan: an agent connecting to Mytex
+The goal is the one from the slogan: an agent connecting to Ourtex
 should be able to read (and eventually propose changes to) a user's
 context as easily as it reads its own documentation.
 
@@ -18,12 +18,12 @@ context as easily as it reads its own documentation.
 2. **Deterministic, grep-shaped responses.** Tools return data
    shaped like the vault — `id`, frontmatter, body — not provider-
    specific structures. An agent that can read a markdown file can
-   consume a Mytex response.
+   consume a Ourtex response.
 3. **Read-only unless the user is watching.** The v1 surface is
    read-only. Writes (`context.propose`) are specified but not shipped
    until the review UI exists.
 4. **No provider lock-in for the user.** Any MCP-capable agent works
-   the same way. Mytex never shapes its responses for a specific model.
+   the same way. Ourtex never shapes its responses for a specific model.
 
 ---
 
@@ -34,10 +34,10 @@ The same tool surface is exposed over two transports.
 | Transport   | Used by                        | Status                                              |
 |-------------|--------------------------------|-----------------------------------------------------|
 | `stdio`     | Local agents on the same host. | Ships in v1. Spawned as a child process.            |
-| `http+sse`  | Remote agents against a server.| Phase 2b. Served by `mytex-server` over TLS, OAuth 2.1 bearer auth. |
+| `http+sse`  | Remote agents against a server.| Phase 2b. Served by `ourtex-server` over TLS, OAuth 2.1 bearer auth. |
 
 In both cases the wire protocol is JSON-RPC 2.0 as defined by the
-MCP specification. Mytex does not extend or reinterpret the protocol;
+MCP specification. Ourtex does not extend or reinterpret the protocol;
 everything below describes the payloads.
 
 ### 2.1 Stdio launch
@@ -45,7 +45,7 @@ everything below describes the payloads.
 Agents launch the server with:
 
 ```
-mytex mcp serve --token <token>
+ourtex mcp serve --token <token>
 ```
 
 The token is **not** read from the environment or the filesystem by
@@ -57,14 +57,14 @@ through a shared shell history or dotfile much less likely.
 For remote use, the relay exposes:
 
 ```
-POST  https://relay.mytex.app/v1/mcp            (JSON-RPC requests)
-GET   https://relay.mytex.app/v1/mcp/events     (SSE stream)
+POST  https://relay.ourtex.app/v1/mcp            (JSON-RPC requests)
+GET   https://relay.ourtex.app/v1/mcp/events     (SSE stream)
 ```
 
 Both require:
 
 - `Authorization: Bearer <token>`
-- `Mytex-Vault-Id: <vault-uuid>`
+- `Ourtex-Vault-Id: <vault-uuid>`
 - TLS 1.3.
 
 The relay never has plaintext access to vault contents. It only
@@ -77,7 +77,7 @@ user's desktop app (or their self-hosted instance).
 
 ### 3.1 Tokens
 
-A token is an opaque string with the shape `mtx_<32+ random chars>`.
+A token is an opaque string with the shape `otx_<32+ random chars>`.
 The server stores only an Argon2id hash. Tokens carry, in the server's
 record:
 
@@ -136,7 +136,7 @@ On `initialize`, the server advertises:
     "resources": { "listChanged": true, "subscribe": true }
   },
   "serverInfo": {
-    "name": "mytex",
+    "name": "ourtex",
     "version": "0.1.0"
   }
 }
@@ -313,7 +313,7 @@ Submit a change to a document for user review.
 - `patch` supports `frontmatter` (merge), `body_replace` (full
   replacement), and `body_append` (string append). Exactly one of
   `body_replace` / `body_append` may be set.
-- Proposals land in `.mytex/proposals/<id>-<timestamp>.json`. The
+- Proposals land in `.ourtex/proposals/<id>-<timestamp>.json`. The
   desktop app surfaces them in a review queue.
 
 **Output**
@@ -339,14 +339,14 @@ that prefer browsing to searching can walk the tree.
 ### 6.1 URI scheme
 
 ```
-mytex://vault/<type>/<id>
-mytex://vault/<type>/
-mytex://vault/
+ourtex://vault/<type>/<id>
+ourtex://vault/<type>/
+ourtex://vault/
 ```
 
-- `mytex://vault/` — lists visible types.
-- `mytex://vault/<type>/` — lists visible documents of that type.
-- `mytex://vault/<type>/<id>` — returns the document's contents.
+- `ourtex://vault/` — lists visible types.
+- `ourtex://vault/<type>/` — lists visible documents of that type.
+- `ourtex://vault/<type>/<id>` — returns the document's contents.
 
 Only resources whose document `visibility` is within the token's
 scope are advertised. Hidden resources are not listed, and direct
@@ -377,7 +377,7 @@ The subscription drops silently if the token is revoked.
 
 ## 7. Error model
 
-JSON-RPC errors use the standard envelope with a Mytex-specific code
+JSON-RPC errors use the standard envelope with a Ourtex-specific code
 in `error.code` and a short machine-readable tag in `error.data.tag`.
 
 | Code     | Tag                 | Meaning                                             |
@@ -403,7 +403,7 @@ The local stdio server applies a light rate limit (default 60
 requests per 10 seconds per token) mostly to protect the indexer from
 runaway loops. The cloud relay applies a stricter limit, configurable
 per plan. Limits are reported via standard `error.data.retry_after_ms`
-and via a `Mytex-RateLimit-*` header set on HTTP responses.
+and via a `Ourtex-RateLimit-*` header set on HTTP responses.
 
 Limits are per **token**, not per vault, so a misbehaving agent cannot
 lock out a well-behaved one.
@@ -453,9 +453,9 @@ The server returns the full list of supported tools via
   secondary — required pass in the v1 test matrix, no UX
   optimization).
 
-**Phase 2b** (with `mytex-server`)
+**Phase 2b** (with `ourtex-server`)
 
-- HTTP+SSE transport mounted on `mytex-server`. Same JSON-RPC
+- HTTP+SSE transport mounted on `ourtex-server`. Same JSON-RPC
   surface. OAuth 2.1 bearer auth replaces opaque tokens for remote
   callers; opaque tokens remain valid for local stdio.
 - `context.propose` lands. Proposals flow into the workspace's

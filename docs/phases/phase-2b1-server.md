@@ -8,7 +8,7 @@ MCP HTTP depend on it. Forward-looking plan context in
 
 ---
 
-### `mytex-server` — 2026-04-19 (Phase 2b.1)
+### `ourtex-server` — 2026-04-19 (Phase 2b.1)
 
 Axum HTTP server, Postgres-backed account + session store. Proves the
 deployment shape (Docker, Postgres, migrations) before vault endpoints,
@@ -27,8 +27,8 @@ crypto, or MCP HTTP depend on it. No vault endpoints yet — those are
   argon2 password hashing and email normalization.
 - `password::{hash, verify}` — thin Argon2id wrapper (PHC strings).
 
-**Binary:** `mytex-server`. Reads `DATABASE_URL` and optional
-`MYTEX_BIND` (default `0.0.0.0:8080`); runs migrations on startup,
+**Binary:** `ourtex-server`. Reads `DATABASE_URL` and optional
+`OURTEX_BIND` (default `0.0.0.0:8080`); runs migrations on startup,
 serves traffic, shuts down cleanly on SIGINT/SIGTERM.
 
 **Routes:**
@@ -49,7 +49,7 @@ serves traffic, shuts down cleanly on SIGINT/SIGTERM.
   with a `lower(email)` index.
 - `sessions(id, account_id, token_prefix, token_hash, label,
   created_at, expires_at, last_used_at, revoked_at)` — opaque
-  `mtx_*` secret, Argon2id-hashed at rest, first-12 prefix indexed.
+  `otx_*` secret, Argon2id-hashed at rest, first-12 prefix indexed.
 - `tenants(id, name, kind)` — `kind in {personal, team}`, one
   personal tenant auto-created per account.
 - `memberships(tenant_id, account_id, role)` — `role in {owner,
@@ -88,8 +88,8 @@ serves traffic, shuts down cleanly on SIGINT/SIGTERM.
   model and saves one Argon2 verify per request. Cache is bounded
   at 10k entries (drops all on overflow — unsophisticated eviction
   is fine at this scale).
-- **Session prefix of 12 chars** (`mtx_` + 8) for the lookup. Same
-  pattern as `mytex-auth`: enough entropy in the prefix that there
+- **Session prefix of 12 chars** (`otx_` + 8) for the lookup. Same
+  pattern as `ourtex-auth`: enough entropy in the prefix that there
   is effectively no collision risk in a single-tenant DB, indexed
   for O(1) lookup. The real verify is Argon2id against the stored
   hash.
@@ -97,7 +97,7 @@ serves traffic, shuts down cleanly on SIGINT/SIGTERM.
   enforced** (2c). Avoids a future schema migration at the moment
   enforcement lands.
 - **Runtime-only config from env.** No TOML / YAML config file. Two
-  required vars (`DATABASE_URL`, optional `MYTEX_BIND`); anything
+  required vars (`DATABASE_URL`, optional `OURTEX_BIND`); anything
   else needs a code change. Keeps the deploy story tight.
 
 **Notable tests:**
@@ -118,15 +118,15 @@ serves traffic, shuts down cleanly on SIGINT/SIGTERM.
 
 **Packaging:**
 
-- `crates/mytex-server/Dockerfile` — multi-stage (rust-slim builder
-  → debian-slim runtime). Runs as unprivileged user `mytex` uid 1000.
+- `crates/ourtex-server/Dockerfile` — multi-stage (rust-slim builder
+  → debian-slim runtime). Runs as unprivileged user `ourtex` uid 1000.
   No curl/wget baked in; healthcheck is compose's responsibility.
-- `crates/mytex-server/docker-compose.yml` — spins up `postgres:16-alpine`
+- `crates/ourtex-server/docker-compose.yml` — spins up `postgres:16-alpine`
   + the server image built from the repo root. Dev uses
   `localhost:8080` over plain HTTP; production expects a TLS
   terminator in front.
-- `crates/mytex-server/.env.example` — documented env vars
-  (`MYTEX_POSTGRES_PASSWORD`). Not committed as `.env`.
+- `crates/ourtex-server/.env.example` — documented env vars
+  (`OURTEX_POSTGRES_PASSWORD`). Not committed as `.env`.
 
 **Known gaps after Phase 2b.1:**
 
@@ -134,10 +134,10 @@ serves traffic, shuts down cleanly on SIGINT/SIGTERM.
 - **No email verification / password reset / rate limiting.** All
   additive; not in 2b.1's tight scope.
 - **No CI Postgres.** Integration tests run locally against a
-  docker-run'd Postgres (`docker run --rm -d -e POSTGRES_USER=mytex
-  -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=mytex_test -p 5555:5432
-  postgres:16-alpine` + `DATABASE_URL=postgres://mytex:testpw@
-  localhost:5555/mytex_test`). Wiring the same into CI is a follow-
+  docker-run'd Postgres (`docker run --rm -d -e POSTGRES_USER=ourtex
+  -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=ourtex_test -p 5555:5432
+  postgres:16-alpine` + `DATABASE_URL=postgres://ourtex:testpw@
+  localhost:5555/ourtex_test`). Wiring the same into CI is a follow-
   up; currently a dev must have Docker to run the integration suite.
 - **`sqlx::query!` macro migration.** Deferred until CI can run
   `cargo sqlx prepare` against a live DB and commit the `.sqlx/`

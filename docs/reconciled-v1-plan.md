@@ -1,4 +1,4 @@
-# Mytex v1 — Reconciled Plan
+# Ourtex v1 — Reconciled Plan
 
 > **Scope:** this document captures v1 decisions (D1–D6) only.
 > Phase 2 decisions (D7–D12: server packaging, multi-workspace
@@ -25,8 +25,8 @@ Everything not listed here stays as it is in `ARCHITECTURE.md`.
 Keep the current layout:
 
 ```
-~/Mytex/
-├─ .mytex/              config, tokens, audit, index, proposals
+~/Ourtex/
+├─ .ourtex/              config, tokens, audit, index, proposals
 ├─ identity/
 ├─ roles/
 ├─ goals/
@@ -41,13 +41,13 @@ Keep the current layout:
 
 **Not** the `context/`-nested layout from the comparison doc.
 
-Why: Obsidian users can point Obsidian at `~/Mytex/` directly — the
+Why: Obsidian users can point Obsidian at `~/Ourtex/` directly — the
 fallback-UI promise is load-bearing. Attachments live at root too (matches
-how Obsidian vaults already work). `mytex.yaml` collapses into
-`.mytex/config.json`; no separate top-level config file.
+how Obsidian vaults already work). `ourtex.yaml` collapses into
+`.ourtex/config.json`; no separate top-level config file.
 
-Teams path stays open via sibling roots (`~/Mytex/personal/`,
-`~/Mytex/acme-team/`), not by adding a `workspaces/` layer inside a
+Teams path stays open via sibling roots (`~/Ourtex/personal/`,
+`~/Ourtex/acme-team/`), not by adding a `workspaces/` layer inside a
 single vault.
 
 ### D2. Permission label — **`visibility`**
@@ -71,8 +71,8 @@ context.list(type?, tags?)
 context.propose(id, patch)      // v1.1, see D6
 ```
 
-Not `mytex.search_context` etc. Shorter, reads naturally at the call
-site, and the `mytex` prefix is redundant once the server is named.
+Not `ourtex.search_context` etc. Shorter, reads naturally at the call
+site, and the `ourtex` prefix is redundant once the server is named.
 
 ### D4. Agent auth — **opaque tokens for v1, OAuth-ready for cloud**
 
@@ -95,7 +95,7 @@ touching callers.
 
 ### D5. Prompt-injection policy — **provenance yes, sanitization no**
 
-Mytex attaches provenance metadata to every fragment it returns
+Ourtex attaches provenance metadata to every fragment it returns
 (`document_id`, `visibility`, `updated_at`, `source`) and marks the
 body as untrusted input. It does **not** rewrite, strip, or
 re-label instruction-like content inside document bodies.
@@ -254,7 +254,7 @@ some slice of the vault.
 **Options.**
 
 - **A. Hard fail.** Relay returns `owner_offline` or similar. Agent
-  sees a clear locked state and can tell the user "your Mytex is
+  sees a clear locked state and can tell the user "your Ourtex is
   offline, unlock a device to continue." Honest, matches "always
   secure," worst UX.
 - **B. User-run keyholder service.** User deploys a lightweight
@@ -262,7 +262,7 @@ some slice of the vault.
   Fly.io/Railway template). It holds a scoped key and services
   relay requests 24/7. Great for power users, non-starter for mainstream.
 - **C. Opt-in hosted unlock for a scope.** User explicitly trusts
-  Mytex cloud with, say, their `public` and `work` context. Relay
+  Ourtex cloud with, say, their `public` and `work` context. Relay
   can decrypt that slice. `private` and `personal` stay E2EE. Breaks
   the pure E2EE claim for the opted-in slice, but gives honest
   always-on access for what the user chose.
@@ -276,7 +276,7 @@ some slice of the vault.
 The "have it both ways" framing from the product side is better than
 any of options A–D above. Concretely:
 
-- The vault is E2EE at rest on cloud storage. Mytex never holds the
+- The vault is E2EE at rest on cloud storage. Ourtex never holds the
   master key long-term.
 - When any user device is online and unlocked, it publishes a
   short-lived **session key** to the cloud, derived from the master
@@ -371,7 +371,7 @@ match the story you want to tell.
 - `ARCHITECTURE.md` §4.5 — no change; D3 matches.
 - `ARCHITECTURE.md` §5.2 — add a note that the token service is
   designed to accept an OAuth path (D4).
-- `ARCHITECTURE.md` §5.5 — tighten to say Mytex attaches provenance
+- `ARCHITECTURE.md` §5.5 — tighten to say Ourtex attaches provenance
   metadata but does not sanitize (D5).
 - `FORMAT.md` (not yet written) — codify D1, D2, and frontmatter
   fields before any indexer work lands.

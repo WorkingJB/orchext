@@ -5,10 +5,10 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use mytex_crypto::{
+use ourtex_crypto::{
     derive_master_key, unwrap_content_key, wrap_content_key, ContentKey, Salt, SealedBlob,
 };
-use mytex_server::{router, AppState};
+use ourtex_server::{router, AppState};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -158,7 +158,7 @@ async fn encrypted_round_trip(db: PgPool) {
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
     let b = read_json(r.into_body()).await;
-    let parsed = mytex_vault::Document::parse(b["source"].as_str().unwrap()).unwrap();
+    let parsed = ourtex_vault::Document::parse(b["source"].as_str().unwrap()).unwrap();
     assert_eq!(parsed.frontmatter.id.as_str(), "rel-jane-smith");
     assert!(parsed.body.contains("My manager at Acme."));
 }
