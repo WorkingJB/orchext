@@ -1,8 +1,8 @@
 use crate::error::{McpError, Result};
 
-pub const SCHEME_PREFIX: &str = "ourtex://vault/";
+pub const SCHEME_PREFIX: &str = "orchext://vault/";
 
-/// What a `ourtex://vault/...` URI points at.
+/// What a `orchext://vault/...` URI points at.
 pub enum Parsed {
     Root,
     Type(String),
@@ -10,13 +10,13 @@ pub enum Parsed {
 }
 
 pub fn parse_uri(uri: &str) -> Result<Parsed> {
-    // Accept `ourtex://vault` and `ourtex://vault/` as equivalent roots.
-    if uri == "ourtex://vault" || uri == SCHEME_PREFIX {
+    // Accept `orchext://vault` and `orchext://vault/` as equivalent roots.
+    if uri == "orchext://vault" || uri == SCHEME_PREFIX {
         return Ok(Parsed::Root);
     }
     let rest = uri
         .strip_prefix(SCHEME_PREFIX)
-        .ok_or_else(|| McpError::InvalidArgument(format!("not a ourtex vault URI: {uri}")))?;
+        .ok_or_else(|| McpError::InvalidArgument(format!("not a orchext vault URI: {uri}")))?;
 
     if rest.is_empty() {
         return Ok(Parsed::Root);
@@ -33,17 +33,17 @@ pub fn parse_uri(uri: &str) -> Result<Parsed> {
             id: (*id).to_string(),
         }),
         _ => Err(McpError::InvalidArgument(format!(
-            "malformed ourtex vault URI: {uri}"
+            "malformed orchext vault URI: {uri}"
         ))),
     }
 }
 
 pub mod resource_definitions {
-    use ourtex_vault::{Document, Entry};
+    use orchext_vault::{Document, Entry};
     use serde_json::{json, Value};
 
     pub fn document(entry: &Entry, doc: &Document) -> Value {
-        let uri = format!("ourtex://vault/{}/{}", entry.type_, entry.id);
+        let uri = format!("orchext://vault/{}/{}", entry.type_, entry.id);
         let title = crate::title::derive_title(&doc.body, entry.id.as_str());
         json!({
             "uri": uri,
@@ -60,13 +60,13 @@ mod tests {
 
     #[test]
     fn parses_root() {
-        assert!(matches!(parse_uri("ourtex://vault/").unwrap(), Parsed::Root));
-        assert!(matches!(parse_uri("ourtex://vault").unwrap(), Parsed::Root));
+        assert!(matches!(parse_uri("orchext://vault/").unwrap(), Parsed::Root));
+        assert!(matches!(parse_uri("orchext://vault").unwrap(), Parsed::Root));
     }
 
     #[test]
     fn parses_type_listing() {
-        match parse_uri("ourtex://vault/relationships/").unwrap() {
+        match parse_uri("orchext://vault/relationships/").unwrap() {
             Parsed::Type(t) => assert_eq!(t, "relationships"),
             _ => panic!("expected Type"),
         }
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn parses_document() {
-        match parse_uri("ourtex://vault/relationships/rel-jane").unwrap() {
+        match parse_uri("orchext://vault/relationships/rel-jane").unwrap() {
             Parsed::Document { type_, id } => {
                 assert_eq!(type_, "relationships");
                 assert_eq!(id, "rel-jane");

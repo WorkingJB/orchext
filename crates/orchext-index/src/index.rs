@@ -3,7 +3,7 @@ use crate::query::{ListFilter, ListItem, SearchHit, SearchQuery};
 use crate::schema::SCHEMA_SQL;
 use crate::title::extract_title;
 use chrono::NaiveDate;
-use ourtex_vault::{Document, DocumentId, VaultDriver};
+use orchext_vault::{Document, DocumentId, VaultDriver};
 use rusqlite::{params_from_iter, types::Value, Connection};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

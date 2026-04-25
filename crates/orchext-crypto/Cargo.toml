@@ -1,5 +1,5 @@
 [package]
-name = "ourtex-crypto"
+name = "orchext-crypto"
 description = "Passphrase KDF + AEAD primitives for at-rest encryption"
 version.workspace = true
 edition.workspace = true

@@ -1,8 +1,8 @@
 //! Per-tenant audit chain stored in Postgres.
 //!
-//! Same shape as `ourtex-audit` (seq, ts, actor, action, document_id,
+//! Same shape as `orchext-audit` (seq, ts, actor, action, document_id,
 //! scope_used, outcome, prev_hash, hash) so a future "export audit" job
-//! can emit JSONL that `ourtex-audit::verify` ingests unchanged. The only
+//! can emit JSONL that `orchext-audit::verify` ingests unchanged. The only
 //! expansion over the v1 wire format is that `actor` here additionally
 //! accepts `account:<uuid>` for actions performed by a logged-in user
 //! via the HTTP surface (v1 only modelled owner + MCP token actors).
@@ -30,7 +30,7 @@ pub const ZERO_HASH: &str =
 
 /// Unencoded actor. `as_encoded` gives the wire string stored in
 /// `audit_entries.actor`; `parse` is the inverse. Mirrors
-/// `ourtex_audit::Actor` with one additional variant.
+/// `orchext_audit::Actor` with one additional variant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Actor {
     Owner,
@@ -183,7 +183,7 @@ pub async fn append(
 }
 
 /// Canonical hash input. Field order is the struct order on the wire —
-/// identical to `ourtex-audit`'s `HashInput` to keep both verifiers
+/// identical to `orchext-audit`'s `HashInput` to keep both verifiers
 /// compatible.
 #[derive(Serialize)]
 struct HashInput<'a> {

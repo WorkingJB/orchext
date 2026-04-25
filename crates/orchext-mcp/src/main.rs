@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
 use chrono::Duration;
-use ourtex_audit::AuditWriter;
-use ourtex_auth::{IssueRequest, Mode, Scope, TokenService};
-use ourtex_index::Index;
-use ourtex_mcp::rpc::{Id, Notification, Request, Response};
-use ourtex_mcp::{McpError, Server};
-use ourtex_vault::{PlainFileDriver, VaultDriver};
+use orchext_audit::AuditWriter;
+use orchext_auth::{IssueRequest, Mode, Scope, TokenService};
+use orchext_index::Index;
+use orchext_mcp::rpc::{Id, Notification, Request, Response};
+use orchext_mcp::{McpError, Server};
+use orchext_vault::{PlainFileDriver, VaultDriver};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -108,10 +108,10 @@ fn parse_args() -> std::result::Result<Cmd, String> {
 fn help_text() -> &'static str {
     "Usage:\n\
      \n\
-     ourtex-mcp serve --token <TOKEN> --vault <VAULT_DIR>\n\
+     orchext-mcp serve --token <TOKEN> --vault <VAULT_DIR>\n\
          Run the JSON-RPC MCP server on stdio.\n\
      \n\
-     ourtex-mcp init --vault <VAULT_DIR> \\\n\
+     orchext-mcp init --vault <VAULT_DIR> \\\n\
                     [--label <LABEL>] [--scope work,public] [--ttl-days 90]\n\
          Create the vault skeleton, issue an initial token, and print a\n\
          Claude Desktop mcpServers config entry. The token secret is\n\
@@ -128,19 +128,19 @@ async fn main() -> ExitCode {
         Ok(Cmd::Serve { token, vault }) => match run_serve(token, vault).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
-                eprintln!("ourtex-mcp: {e}");
+                eprintln!("orchext-mcp: {e}");
                 ExitCode::from(1)
             }
         },
         Ok(Cmd::Init(args)) => match run_init(args).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
-                eprintln!("ourtex-mcp: {e}");
+                eprintln!("orchext-mcp: {e}");
                 ExitCode::from(1)
             }
         },
         Err(e) => {
-            eprintln!("ourtex-mcp: {e}\n\n{}", help_text());
+            eprintln!("orchext-mcp: {e}\n\n{}", help_text());
             ExitCode::from(2)
         }
     }
@@ -157,19 +157,19 @@ async fn run_serve(token_secret: String, vault_root: PathBuf) -> std::result::Re
         .canonicalize()
         .map_err(|e| format!("vault path {}: {e}", vault_root.display()))?;
     let vault: Arc<dyn VaultDriver> = Arc::new(PlainFileDriver::new(vault_root.clone()));
-    let ourtex_dir = vault_root.join(".ourtex");
+    let orchext_dir = vault_root.join(".orchext");
     let index = Arc::new(
-        Index::open(ourtex_dir.join("index.sqlite"))
+        Index::open(orchext_dir.join("index.sqlite"))
             .await
             .map_err(|e| format!("open index: {e}"))?,
     );
     let auth = Arc::new(
-        TokenService::open(ourtex_dir.join("tokens.json"))
+        TokenService::open(orchext_dir.join("tokens.json"))
             .await
             .map_err(|e| format!("open token service: {e}"))?,
     );
     let audit = Arc::new(
-        AuditWriter::open(ourtex_dir.join("audit.jsonl"))
+        AuditWriter::open(orchext_dir.join("audit.jsonl"))
             .await
             .map_err(|e| format!("open audit log: {e}"))?,
     );
@@ -195,7 +195,7 @@ async fn run_serve(token_secret: String, vault_root: PathBuf) -> std::result::Re
     // Watcher holds notify's RecommendedWatcher alive via WatcherHandle.
     // Dropping `_watch` stops the watcher; we keep it scoped to this
     // function so it lives for the duration of the serve loop.
-    let _watch = ourtex_mcp::watch::spawn(vault_root.clone(), server.clone())
+    let _watch = orchext_mcp::watch::spawn(vault_root.clone(), server.clone())
         .map_err(|e| format!("start fs watcher: {e}"))?;
 
     serve_stdio(server, note_rx).await.map_err(|e| e.to_string())
@@ -287,12 +287,12 @@ async fn run_init(args: InitArgs) -> std::result::Result<(), String> {
             .await
             .map_err(|e| format!("create {t} dir: {e}"))?;
     }
-    let ourtex_dir = vault.join(".ourtex");
-    tokio::fs::create_dir_all(&ourtex_dir)
+    let orchext_dir = vault.join(".orchext");
+    tokio::fs::create_dir_all(&orchext_dir)
         .await
-        .map_err(|e| format!(".ourtex dir: {e}"))?;
+        .map_err(|e| format!(".orchext dir: {e}"))?;
 
-    let auth = TokenService::open(ourtex_dir.join("tokens.json"))
+    let auth = TokenService::open(orchext_dir.join("tokens.json"))
         .await
         .map_err(|e| format!("open token service: {e}"))?;
 
@@ -312,10 +312,10 @@ async fn run_init(args: InitArgs) -> std::result::Result<(), String> {
 
     // Pre-create the index + audit log so a first `serve` invocation
     // doesn't have to — catches permission issues at init time.
-    let _ = Index::open(ourtex_dir.join("index.sqlite"))
+    let _ = Index::open(orchext_dir.join("index.sqlite"))
         .await
         .map_err(|e| format!("init index: {e}"))?;
-    let _ = AuditWriter::open(ourtex_dir.join("audit.jsonl"))
+    let _ = AuditWriter::open(orchext_dir.join("audit.jsonl"))
         .await
         .map_err(|e| format!("init audit: {e}"))?;
 
@@ -324,12 +324,12 @@ async fn run_init(args: InitArgs) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn print_init_summary(vault: &Path, secret: &str, info: &ourtex_auth::PublicTokenInfo) {
+fn print_init_summary(vault: &Path, secret: &str, info: &orchext_auth::PublicTokenInfo) {
     let exe = std::env::current_exe()
         .ok()
         .and_then(|p| p.canonicalize().ok())
         .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| "ourtex-mcp".into());
+        .unwrap_or_else(|| "orchext-mcp".into());
     let vault_str = vault.to_string_lossy();
     let scope_list = info.scope.join(", ");
 
@@ -346,7 +346,7 @@ fn print_init_summary(vault: &Path, secret: &str, info: &ourtex_auth::PublicToke
     println!("Claude Desktop mcpServers entry (add to claude_desktop_config.json):");
     let config = serde_json::json!({
         "mcpServers": {
-            "ourtex": {
+            "orchext": {
                 "command": exe,
                 "args": ["serve", "--vault", vault_str, "--token", secret]
             }

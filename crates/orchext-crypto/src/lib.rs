@@ -1,4 +1,4 @@
-//! Passphrase KDF + AEAD primitives powering Ourtex's at-rest
+//! Passphrase KDF + AEAD primitives powering Orchext's at-rest
 //! encryption (Phase 2b.3). Key hierarchy:
 //!
 //! ```text
@@ -34,6 +34,8 @@ pub mod error;
 pub mod kdf;
 
 pub use aead::{open, seal, SealedBlob, KEY_LEN, NONCE_LEN};
-pub use content_key::{unwrap_content_key, wrap_content_key, ContentKey};
+pub use content_key::{
+    make_key_check, unwrap_content_key, verify_key_check, wrap_content_key, ContentKey,
+};
 pub use error::{CryptoError, Result};
 pub use kdf::{derive_master_key, MasterKey, Salt};

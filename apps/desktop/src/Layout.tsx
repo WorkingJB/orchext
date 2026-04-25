@@ -57,7 +57,7 @@ export function Layout({
   return (
     <div className="h-full flex flex-col">
       <header className="border-b border-neutral-200 bg-white px-4 h-12 flex items-center gap-3">
-        <span className="font-semibold">Ourtex</span>
+        <span className="font-semibold">Orchext</span>
         <span className="text-neutral-400">·</span>
         <WorkspaceSwitcher active={vault} onSwitched={onSwitched} />
       </header>

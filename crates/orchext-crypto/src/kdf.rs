@@ -1,8 +1,8 @@
 //! Passphrase → `MasterKey` via Argon2id.
 //!
 //! Parameters are the `Argon2::default()` profile (Argon2id, m=19456,
-//! t=2, p=1), matching the rest of the workspace (`ourtex-server`
-//! password hashing, `ourtex-auth` token hashing). The 32-byte output
+//! t=2, p=1), matching the rest of the workspace (`orchext-server`
+//! password hashing, `orchext-auth` token hashing). The 32-byte output
 //! is used directly as an AEAD key — we call `hash_password_into`
 //! rather than the PHC-string variant because we want raw key bytes,
 //! not a stored-credential envelope.

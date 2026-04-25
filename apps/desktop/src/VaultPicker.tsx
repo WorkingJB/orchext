@@ -5,7 +5,7 @@ import { api, VaultInfo } from "./api";
 export function VaultPicker({
   onOpened,
   onCancel,
-  title = "Ourtex",
+  title = "Orchext",
   description,
 }: {
   onOpened: (v: VaultInfo) => void;
@@ -40,9 +40,9 @@ export function VaultPicker({
         <p className="text-neutral-600 mb-6 text-sm">
           {description ?? (
             <>
-              Pick a folder to use as your vault. If it's empty, Ourtex will
+              Pick a folder to use as your vault. If it's empty, Orchext will
               create the skeleton (type directories +{" "}
-              <span className="font-mono">.ourtex/</span>). Existing vaults open
+              <span className="font-mono">.orchext/</span>). Existing vaults open
               in place.
             </>
           )}

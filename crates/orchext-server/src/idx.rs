@@ -1,6 +1,6 @@
 //! Index endpoints — search, list (filtered), graph, backlinks.
 //!
-//! Wire parity with the `ourtex-index` local surface: request shapes and
+//! Wire parity with the `orchext-index` local surface: request shapes and
 //! response fields are drop-in compatible with `SearchQuery`, `ListFilter`,
 //! and the graph/backlinks helpers, so the sync client can fan them out
 //! onto HTTP without a translation layer.

@@ -1,6 +1,6 @@
 //! Per-tenant MCP tokens: list, issue, revoke.
 //!
-//! Same token shape as `ourtex-auth::StoredToken` (opaque `otx_*` secret,
+//! Same token shape as `orchext-auth::StoredToken` (opaque `ocx_*` secret,
 //! Argon2id-hashed at rest, scope as a list of visibility labels, mode =
 //! `read` | `read_propose`, retrieval limits). The only difference is
 //! that these tokens belong to a tenant and the issuing account, not to
@@ -31,7 +31,7 @@ pub fn router() -> Router<AppState> {
         .route("/tokens/:token_id", router_delete(revoke_token))
 }
 
-const TOKEN_PREFIX: &str = "otx_";
+const TOKEN_PREFIX: &str = "ocx_";
 const TOKEN_BYTES: usize = 32;
 const PREFIX_LOOKUP_LEN: usize = TOKEN_PREFIX.len() + 8;
 const DEFAULT_TTL_DAYS: i64 = 90;
@@ -196,11 +196,11 @@ fn normalize_scope(raw: Vec<String>) -> Result<Vec<String>, ApiError> {
     if raw.is_empty() {
         return Err(ApiError::InvalidArgument("scope must not be empty".into()));
     }
-    // Validate each label via ourtex_vault::Visibility. Keeps us honest
+    // Validate each label via orchext_vault::Visibility. Keeps us honest
     // about what a scope label means: the literal string that must
     // match a document's `visibility`.
     for label in &raw {
-        ourtex_vault::Visibility::from_label(label).map_err(|_| {
+        orchext_vault::Visibility::from_label(label).map_err(|_| {
             ApiError::InvalidArgument(format!("invalid scope label {label:?}"))
         })?;
     }

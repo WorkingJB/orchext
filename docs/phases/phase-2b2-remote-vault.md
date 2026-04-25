@@ -1,7 +1,7 @@
 # Phase 2b.2 — Remote vault + sync client (shipped)
 
 Shipped 2026-04-19. Extends the 2b.1 server with tenant-scoped vault,
-index, token, and audit endpoints; introduces the `ourtex-sync`
+index, token, and audit endpoints; introduces the `orchext-sync`
 client crate; desktop gains remote workspaces. Still plaintext at
 rest (encryption retrofits in 2b.3). Forward-looking plan context in
 [`phase-2-plan.md`](phase-2-plan.md); live status in
@@ -9,7 +9,7 @@ rest (encryption retrofits in 2b.3). Forward-looking plan context in
 
 ---
 
-### `ourtex-server` — 2026-04-19 (Phase 2b.2 delta)
+### `orchext-server` — 2026-04-19 (Phase 2b.2 delta)
 
 Extends the 2b.1 surface with vault + index + tokens + audit endpoints
 scoped to a tenant, plus a `/v1/tenants` membership listing. Still
@@ -39,8 +39,8 @@ tenant-scoped routes additionally require membership):**
 **New schema (`migrations/0002_vault.sql`):** `documents` +
 `doc_tags` + `doc_links` (with a generated `tsvector` column + GIN
 index for FTS); `audit_entries` (per-tenant hash-chained log, shape
-identical to `ourtex-audit`'s JSONL wire format); `mcp_tokens` (mirrors
-`ourtex-auth::StoredToken` — `otx_*` secret, Argon2id-hashed at rest,
+identical to `orchext-audit`'s JSONL wire format); `mcp_tokens` (mirrors
+`orchext-auth::StoredToken` — `ocx_*` secret, Argon2id-hashed at rest,
 scope + mode + limits).
 
 **New server modules:**
@@ -49,7 +49,7 @@ scope + mode + limits).
   that extracts `:tid`, joins `memberships`, attaches a
   `TenantContext` to the request. A non-member hitting a tenant URL
   gets `404 not_found` — enumeration-safe against tenant-id probing.
-- `documents.rs` — vault CRUD. Wire format is the canonical ourtex-vault
+- `documents.rs` — vault CRUD. Wire format is the canonical orchext-vault
   source (YAML frontmatter + markdown body) as a single `source` field,
   so the version hash computed server-side matches bit-for-bit whatever
   the client computes locally.
@@ -63,13 +63,13 @@ scope + mode + limits).
 - `audit.rs` — `append(tx, tenant_id, record)` called from inside
   the writer's transaction so a rolled-back mutation cannot leave
   an "it happened" entry. Hash input struct is field-for-field
-  identical to `ourtex-audit`'s, so a future export-to-JSONL job
-  emits records that `ourtex_audit::verify` accepts unchanged.
+  identical to `orchext-audit`'s, so a future export-to-JSONL job
+  emits records that `orchext_audit::verify` accepts unchanged.
 
 **Decisions recorded here:**
 
 - **Wire format for documents is canonical source, not a DTO.**
-  Sending the exact YAML+markdown bytes that `ourtex-vault::Document`
+  Sending the exact YAML+markdown bytes that `orchext-vault::Document`
   produces on disk keeps the content hash identical whether computed
   client-side or server-side. The frontmatter is *also* stored as
   JSONB in the `documents` table for structured queries (type_,
@@ -107,7 +107,7 @@ scope + mode + limits).
 **Integration tests (`tests/vault_flow.rs`):**
 
 - `vault_write_read_roundtrip` — PUT + GET of the same doc;
-  canonical source round-trips through `ourtex-vault::Document::parse`.
+  canonical source round-trips through `orchext-vault::Document::parse`.
 - `vault_version_conflict` — second write with a wrong
   `base_version` returns `409` with `message = "version_conflict"`.
 - `vault_cross_tenant_is_not_found` — user B hitting user A's
@@ -125,11 +125,11 @@ scope + mode + limits).
   info; list includes the new token; revoke returns 204; re-revoke
   returns 404.
 
-### `ourtex-sync` — 2026-04-19 (new, Phase 2b.2)
+### `orchext-sync` — 2026-04-19 (new, Phase 2b.2)
 
-Client-side library that turns a running `ourtex-server` into a
+Client-side library that turns a running `orchext-server` into a
 `VaultDriver` the existing local stack can use unchanged. Every caller
-of the trait — `ourtex-index::Index::reindex_from`, the desktop's
+of the trait — `orchext-index::Index::reindex_from`, the desktop's
 Tauri commands — works against a remote workspace without code
 changes downstream.
 
@@ -152,8 +152,8 @@ changes downstream.
 
 **Decisions recorded here:**
 
-- **No client-side cache layer inside `ourtex-sync`.** Callers
-  construct a local `ourtex-index::Index` at a cache path and call
+- **No client-side cache layer inside `orchext-sync`.** Callers
+  construct a local `orchext-index::Index` at a cache path and call
   `reindex_from(&remote_driver)` on open. Lists/searches then go
   through the local Index (SQLite + FTS5), writes go through the
   RemoteVaultDriver + mirror into the local Index. The alternative
@@ -174,9 +174,9 @@ changes downstream.
 
 **Deps added to workspace:** `reqwest` (0.12, rustls-tls),
 `url` (2). Both already in the desktop crate; the workspace pin
-lets `ourtex-sync` share them.
+lets `orchext-sync` share them.
 
-### `ourtex-desktop` — 2026-04-19 (Phase 2b.2 delta)
+### `orchext-desktop` — 2026-04-19 (Phase 2b.2 delta)
 
 Opens remote workspaces in the same UI shell as local ones. First-run
 users still get "Add workspace…" for local; a new `workspace_connect_remote`
@@ -202,7 +202,7 @@ kinds.
   - `"local"` → existing `PlainFileDriver` + local Index + tokens
     + audit + (on activate) fs watcher.
   - `"remote"` → `RemoteVaultDriver` + local Index at
-    `~/.ourtex/remote/<workspace_id>/index.sqlite`, reindex_from the
+    `~/.orchext/remote/<workspace_id>/index.sqlite`, reindex_from the
     server at open. Auth/audit/watcher are `None`.
 - `Services::require_local(feature)` — helper that gives a clear
   error for remote workspaces hitting a local-only command.
@@ -213,7 +213,7 @@ kinds.
   tenant_id?)` — logs in, lists tenants, picks the personal tenant
   (or the one the caller specified), persists the session token, and
   activates the resulting workspace. Cache root is
-  `~/.ourtex/remote/<workspace_id>/`.
+  `~/.orchext/remote/<workspace_id>/`.
 - `token_*`, `audit_list`: call `require_local` and surface a clear
   "not yet wired through the server" error for remote. Full wiring
   (issue tokens via `POST /v1/t/:tid/tokens`, read audit via
@@ -234,14 +234,14 @@ kinds.
   remote" message. Routing them through `/v1/t/:tid/tokens` and
   `/v1/t/:tid/audit` is a follow-up.
 - **Session token stored in plaintext in `workspaces.json`.** Same
-  threat model as the `.ourtex/settings.json` Anthropic key; move
+  threat model as the `.orchext/settings.json` Anthropic key; move
   to `tauri-plugin-stronghold` / OS keychain in 2b.3 with the
   unlock flow.
 - **No periodic re-sync.** Reindex runs once on open; a concurrent
   edit from another client goes unseen until the next open. SSE /
   polling is the plan (deferred this session); polling is the
   cheaper first cut.
-- **Onboarding + `ourtex-mcp` stdio still local-only.** Running the
+- **Onboarding + `orchext-mcp` stdio still local-only.** Running the
   local MCP server against a `RemoteVaultDriver` would let
   stdio-launched agents read remote context; punted so we can ship
   the HTTP endpoints first.

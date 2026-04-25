@@ -1,5 +1,5 @@
 use crate::error::{AuthError, Result};
-use ourtex_vault::Visibility;
+use orchext_vault::Visibility;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 

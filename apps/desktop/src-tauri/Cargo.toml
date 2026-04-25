@@ -1,6 +1,6 @@
 [package]
-name = "ourtex-desktop"
-description = "Ourtex desktop management app"
+name = "orchext-desktop"
+description = "Orchext desktop management app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,23 +8,23 @@ rust-version.workspace = true
 repository.workspace = true
 
 [lib]
-name = "ourtex_desktop_lib"
+name = "orchext_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "ourtex-desktop"
+name = "orchext-desktop"
 path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-ourtex-vault = { workspace = true }
-ourtex-index = { workspace = true }
-ourtex-auth = { workspace = true }
-ourtex-audit = { workspace = true }
-ourtex-sync = { workspace = true }
-ourtex-crypto = { workspace = true }
+orchext-vault = { workspace = true }
+orchext-index = { workspace = true }
+orchext-auth = { workspace = true }
+orchext-audit = { workspace = true }
+orchext-sync = { workspace = true }
+orchext-crypto = { workspace = true }
 uuid = { workspace = true }
 url = { workspace = true }
 

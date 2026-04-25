@@ -16,9 +16,9 @@ CREATE TABLE accounts (
 
 CREATE INDEX accounts_email_lower_idx ON accounts ((lower(email)));
 
--- Opaque session tokens. The raw `otx_*` secret is only visible to the
+-- Opaque session tokens. The raw `ocx_*` secret is only visible to the
 -- caller that just logged in; the server stores only an Argon2id hash
--- plus a short `token_prefix` for lookup (matches `ourtex-auth` pattern).
+-- plus a short `token_prefix` for lookup (matches `orchext-auth` pattern).
 CREATE TABLE sessions (
     id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id    UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,

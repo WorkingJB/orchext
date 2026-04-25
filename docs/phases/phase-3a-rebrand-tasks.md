@@ -1,6 +1,6 @@
 # Phase 3a — Rebrand to Orchext + vault-native tasks & skills (plan)
 
-Kicks off Phase 3 on the new name: `ourtex` → `orchext` (orchestration +
+Kicks off Phase 3 on the new name: `orchext` → `orchext` (orchestration +
 context) in one clean sweep, and lands `type: task` and `type: skill` as
 first-class vault seed types so users can author tasks and skills by
 hand before any external integration exists. Pulled to 3a because
@@ -22,7 +22,7 @@ decisions D7–D17) and [`phase-3b-integrations.md`](phase-3b-integrations.md)
 
 ## Goals
 
-1. Every `ourtex-*` identifier (crate, env var, disk directory, token
+1. Every `orchext-*` identifier (crate, env var, disk directory, token
    prefix, bundle ID, package name, URL) renames to `orchext-*` /
    `ORCHEXT_*` / `.orchext` / `ocx_*` / `app.orchext.desktop` /
    `orchext-web`, in one feature branch.
@@ -61,27 +61,27 @@ Gating is a correctness check, not a security feature — the
 orchestrator in 3e refuses to inject a skill whose declared runtimes
 don't include the session's adapter.
 
-**D21. Clean rebrand, no shims.** Matches the 2026-04-21 mytex → ourtex
+**D21. Clean rebrand, no shims.** Matches the 2026-04-21 mytex → orchext
 playbook. Old installs rebuild. No `orchext migrate` helper.
 
 ## Rebrand sweep — what moves
 
 | Surface | From | To |
 |---|---|---|
-| Crate names (9) + directories | `ourtex-*`, `crates/ourtex-*/` | `orchext-*`, `crates/orchext-*/` |
-| Workspace + Cargo deps | `ourtex-*` | `orchext-*` |
-| Env var prefix | `OURTEX_*` (e.g. `OURTEX_BIND`, `OURTEX_SERVER_URL`) | `ORCHEXT_*` |
-| Vault directory on disk | `~/.ourtex/` | `~/.orchext/` |
-| Workspaces registry file | `~/.ourtex/workspaces.json` | `~/.orchext/workspaces.json` |
-| Token prefix | `otx_*` (constant in `ourtex-auth`) | `ocx_*` |
-| Desktop bundle ID | `app.ourtex.desktop` (or current value) | `app.orchext.desktop` |
-| Tauri identifier / signing config | `ourtex` | `orchext` |
-| Server binary | `ourtex-server` | `orchext-server` |
-| Docker image / compose | `ourtex-server:*` | `orchext-server:*` |
-| npm package names | `ourtex-desktop-frontend`, `ourtex-web` | `orchext-desktop-frontend`, `orchext-web` |
-| Types/identifiers in Rust | `Ourtex*`, `ourtex_*` | `Orchext*`, `orchext_*` |
-| GitHub org/repo | `ourtex-app/ourtex` | `orchext-app/orchext` |
-| Docs | every `ourtex` / `Ourtex` reference | `orchext` / `Orchext` |
+| Crate names (9) + directories | `orchext-*`, `crates/orchext-*/` | `orchext-*`, `crates/orchext-*/` |
+| Workspace + Cargo deps | `orchext-*` | `orchext-*` |
+| Env var prefix | `ORCHEXT_*` (e.g. `ORCHEXT_BIND`, `ORCHEXT_SERVER_URL`) | `ORCHEXT_*` |
+| Vault directory on disk | `~/.orchext/` | `~/.orchext/` |
+| Workspaces registry file | `~/.orchext/workspaces.json` | `~/.orchext/workspaces.json` |
+| Token prefix | `ocx_*` (constant in `orchext-auth`) | `ocx_*` |
+| Desktop bundle ID | `app.orchext.desktop` (or current value) | `app.orchext.desktop` |
+| Tauri identifier / signing config | `orchext` | `orchext` |
+| Server binary | `orchext-server` | `orchext-server` |
+| Docker image / compose | `orchext-server:*` | `orchext-server:*` |
+| npm package names | `orchext-desktop-frontend`, `orchext-web` | `orchext-desktop-frontend`, `orchext-web` |
+| Types/identifiers in Rust | `Orchext*`, `orchext_*` | `Orchext*`, `orchext_*` |
+| GitHub org/repo | `orchext-app/orchext` | `orchext-app/orchext` |
+| Docs | every `orchext` / `Orchext` reference | `orchext` / `Orchext` |
 
 ## FORMAT v0.2 additions
 
@@ -168,7 +168,7 @@ Placeholder for 3d's agent registry. Same reason: one FORMAT bump.
 
 ## Verification
 
-- `rg -i "ourtex|mytex"` returns zero hits outside `docs/` rebrand
+- `rg -i "orchext|mytex"` returns zero hits outside `docs/` rebrand
   history notes.
 - `cargo test --workspace` — ≥ 148/148 pass with `DATABASE_URL` set
   (plus new `orchext-tasks` unit tests).

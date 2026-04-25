@@ -6,7 +6,7 @@
 //! require Postgres to be reachable via `DATABASE_URL` (or whatever
 //! sqlx's test harness resolves via `.env` / env vars).
 //!
-//! If Postgres is not available, running `cargo test -p ourtex-server`
+//! If Postgres is not available, running `cargo test -p orchext-server`
 //! will still pass because these tests are in a separate integration
 //! test target that `sqlx` simply won't execute without a DB — each
 //! `#[sqlx::test]` function connects at test start and errors cleanly.
@@ -15,7 +15,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use ourtex_server::{router, AppState};
+use orchext_server::{router, AppState};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt; // for `oneshot`
@@ -25,7 +25,7 @@ const MAX_BODY: usize = 1 << 20;
 
 #[sqlx::test(migrations = "./migrations")]
 async fn signup_then_me_roundtrip(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
 
     // Signup.
     let resp = app
@@ -33,7 +33,7 @@ async fn signup_then_me_roundtrip(db: PgPool) {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/auth/signup")
+                .uri("/v1/auth/native/signup")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
@@ -50,7 +50,7 @@ async fn signup_then_me_roundtrip(db: PgPool) {
     assert_eq!(resp.status(), StatusCode::CREATED);
     let body: Value = read_json(resp.into_body()).await;
     let secret = body["session"]["secret"].as_str().unwrap().to_string();
-    assert!(secret.starts_with("otx_"));
+    assert!(secret.starts_with("ocx_"));
     let account_id = body["account"]["id"].as_str().unwrap().to_string();
 
     // Me with bearer — should return the same account.
@@ -74,7 +74,7 @@ async fn signup_then_me_roundtrip(db: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn login_after_signup_succeeds(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
 
     // Signup.
     let _ = app
@@ -89,7 +89,7 @@ async fn login_after_signup_succeeds(db: PgPool) {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/auth/login")
+                .uri("/v1/auth/native/login")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
@@ -105,12 +105,12 @@ async fn login_after_signup_succeeds(db: PgPool) {
     assert_eq!(resp.status(), StatusCode::OK);
     let body: Value = read_json(resp.into_body()).await;
     let secret = body["session"]["secret"].as_str().unwrap();
-    assert!(secret.starts_with("otx_"));
+    assert!(secret.starts_with("ocx_"));
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn login_wrong_password_unauthorized(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
 
     let _ = app
         .clone()
@@ -123,7 +123,7 @@ async fn login_wrong_password_unauthorized(db: PgPool) {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/auth/login")
+                .uri("/v1/auth/native/login")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
@@ -144,14 +144,14 @@ async fn login_unknown_email_indistinguishable_from_wrong_password(db: PgPool) {
     // The enumeration-resistance invariant: both failures map to 401
     // with the same tag. If this regresses, an attacker can probe
     // which emails have accounts.
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
 
     let resp = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/auth/login")
+                .uri("/v1/auth/native/login")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
@@ -171,7 +171,7 @@ async fn login_unknown_email_indistinguishable_from_wrong_password(db: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn duplicate_signup_conflicts(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let _ = app
         .clone()
         .oneshot(signup_req("user@example.com", "correct horse battery staple"))
@@ -188,7 +188,7 @@ async fn duplicate_signup_conflicts(db: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn logout_revokes_session(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let signup_resp = app
         .clone()
         .oneshot(signup_req("user@example.com", "correct horse battery staple"))
@@ -233,7 +233,7 @@ async fn logout_revokes_session(db: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn me_without_bearer_unauthorized(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let resp = app
         .oneshot(
             Request::builder()
@@ -249,7 +249,7 @@ async fn me_without_bearer_unauthorized(db: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn short_password_rejected(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let resp = app
         .oneshot(signup_req("user@example.com", "short"))
         .await
@@ -258,8 +258,51 @@ async fn short_password_rejected(db: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn browser_signup_does_not_leak_secret(db: PgPool) {
+    // Pins the P1 fix from the adversarial review: browser endpoints
+    // must NOT include the bearer secret in the JSON body. The session
+    // reaches the browser only via the HttpOnly cookie set in the
+    // response.
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/signup")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "email": "browser@example.com",
+                        "password": "correct horse battery staple"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let cookie_header = resp
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|h| h.to_str().ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        cookie_header.contains("orchext_session="),
+        "browser signup must set the session cookie; got cookies: {cookie_header}"
+    );
+    let body: Value = read_json(resp.into_body()).await;
+    assert!(
+        body["session"].get("secret").is_none(),
+        "browser signup must not return the bearer secret in JSON; got {body}"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn healthz_ok(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let resp = app
         .oneshot(
             Request::builder()

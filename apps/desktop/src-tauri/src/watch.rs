@@ -1,13 +1,13 @@
 //! Filesystem watcher → live re-index + Tauri `vault://changed` event.
 //!
-//! Mirrors the pattern in `crates/ourtex-mcp/src/watch.rs`: a sync thread
+//! Mirrors the pattern in `crates/orchext-mcp/src/watch.rs`: a sync thread
 //! owns the `notify::RecommendedWatcher` receiver, classifies relevant
 //! paths to `(type, id)`, then hops back onto the tokio runtime to
 //! upsert/remove the index and emit a Tauri event the frontend can
 //! listen for. No debouncing (matches mcp).
 
-use ourtex_index::Index;
-use ourtex_vault::{DocumentId, VaultDriver};
+use orchext_index::Index;
+use orchext_vault::{DocumentId, VaultDriver};
 use notify::event::EventKind;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ pub fn spawn(
     let runtime = Handle::current();
     let root = vault_root;
     std::thread::Builder::new()
-        .name("ourtex-desktop-watch".into())
+        .name("orchext-desktop-watch".into())
         .spawn(move || {
             while let Ok(res) = rx.recv() {
                 match res {
@@ -119,7 +119,7 @@ fn is_relevant_kind(kind: &EventKind) -> bool {
 }
 
 /// Map a path under `root` to `(type, id)`, or None if it's not a doc.
-/// Shape must be `<root>/<type>/<id>.md`; `.ourtex/`, dot-dirs, and deeper
+/// Shape must be `<root>/<type>/<id>.md`; `.orchext/`, dot-dirs, and deeper
 /// nesting are ignored so behavior matches `PlainFileDriver::list`.
 fn classify(root: &Path, path: &Path) -> Option<(String, String)> {
     let rel = path.strip_prefix(root).ok()?;
@@ -153,9 +153,9 @@ mod tests {
     }
 
     #[test]
-    fn skips_dot_ourtex() {
+    fn skips_dot_orchext() {
         let root = Path::new("/vault");
-        assert!(classify(root, Path::new("/vault/.ourtex/audit.jsonl")).is_none());
+        assert!(classify(root, Path::new("/vault/.orchext/audit.jsonl")).is_none());
     }
 
     #[test]

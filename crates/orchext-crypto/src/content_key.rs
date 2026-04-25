@@ -19,7 +19,15 @@ use crate::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{rngs::OsRng, RngCore};
+use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
+
+/// Domain-separated marker plaintext sealed with the content key at
+/// init-crypto time. The server stores the sealed blob and re-opens it
+/// with any subsequently-published key to verify the key matches the
+/// wrapped one — without ever holding the passphrase or the content
+/// key itself.
+const KEY_CHECK_PLAINTEXT: &[u8] = b"vault-key-check-v1";
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct ContentKey([u8; KEY_LEN]);
@@ -84,6 +92,24 @@ pub fn unwrap_content_key(blob: &SealedBlob, master: &MasterKey) -> Result<Conte
     Ok(ContentKey(out))
 }
 
+/// Build a key-check blob from a content key. The blob is the
+/// domain-separated marker plaintext sealed under `content`. Stored on
+/// the server at init time.
+pub fn make_key_check(content: &ContentKey) -> Result<SealedBlob> {
+    seal(KEY_CHECK_PLAINTEXT, content.expose_bytes())
+}
+
+/// Verify that `content` is the same key that produced `stored`. Any
+/// failure — wrong key, tampered blob, plaintext mismatch — collapses
+/// to `CryptoError::Open` so callers can't distinguish failure modes.
+pub fn verify_key_check(stored: &SealedBlob, content: &ContentKey) -> Result<()> {
+    let plain = open(stored, content.expose_bytes())?;
+    if !bool::from(plain.as_slice().ct_eq(KEY_CHECK_PLAINTEXT)) {
+        return Err(CryptoError::Open);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +141,20 @@ mod tests {
         let s = c.to_wire();
         let back = ContentKey::from_wire(&s).unwrap();
         assert_eq!(back.expose_bytes(), c.expose_bytes());
+    }
+
+    #[test]
+    fn key_check_round_trip() {
+        let key = ContentKey::generate();
+        let blob = make_key_check(&key).unwrap();
+        verify_key_check(&blob, &key).expect("same key opens its own check blob");
+    }
+
+    #[test]
+    fn key_check_rejects_wrong_key() {
+        let key = ContentKey::generate();
+        let other = ContentKey::generate();
+        let blob = make_key_check(&key).unwrap();
+        assert!(verify_key_check(&blob, &other).is_err());
     }
 }

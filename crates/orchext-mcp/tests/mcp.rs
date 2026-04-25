@@ -1,10 +1,10 @@
 use chrono::NaiveDate;
-use ourtex_audit::AuditWriter;
-use ourtex_auth::{IssueRequest, Mode, Scope, TokenService};
-use ourtex_index::Index;
-use ourtex_mcp::rpc::{Notification, Request};
-use ourtex_mcp::Server;
-use ourtex_vault::{Document, DocumentId, Frontmatter, PlainFileDriver, VaultDriver, Visibility};
+use orchext_audit::AuditWriter;
+use orchext_auth::{IssueRequest, Mode, Scope, TokenService};
+use orchext_index::Index;
+use orchext_mcp::rpc::{Notification, Request};
+use orchext_mcp::Server;
+use orchext_vault::{Document, DocumentId, Frontmatter, PlainFileDriver, VaultDriver, Visibility};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -113,12 +113,12 @@ async fn fixture_with_notifier(
         .await
         .unwrap();
 
-    let ourtex_dir = root.join(".ourtex");
-    let index = Arc::new(Index::open(ourtex_dir.join("index.sqlite")).await.unwrap());
+    let orchext_dir = root.join(".orchext");
+    let index = Arc::new(Index::open(orchext_dir.join("index.sqlite")).await.unwrap());
     index.reindex_from(&*vault).await.unwrap();
 
-    let auth = Arc::new(TokenService::open(ourtex_dir.join("tokens.json")).await.unwrap());
-    let audit_path = ourtex_dir.join("audit.jsonl");
+    let auth = Arc::new(TokenService::open(orchext_dir.join("tokens.json")).await.unwrap());
+    let audit_path = orchext_dir.join("audit.jsonl");
     let audit = Arc::new(AuditWriter::open(&audit_path).await.unwrap());
 
     let scope = Scope::new(scope_labels.iter().map(|s| s.to_string())).unwrap();
@@ -189,7 +189,7 @@ async fn initialize_advertises_capabilities() {
     let fx = fixture(&["work", "public"]).await;
     let result = call(&fx.server, "initialize", json!({})).await;
     assert_eq!(result["protocolVersion"], "2025-06-18");
-    assert_eq!(result["serverInfo"]["name"], "ourtex");
+    assert_eq!(result["serverInfo"]["name"], "orchext");
     assert_eq!(result["capabilities"]["tools"]["listChanged"], true);
     assert_eq!(result["capabilities"]["resources"]["subscribe"], true);
 }
@@ -381,7 +381,7 @@ async fn resources_read_returns_two_content_items() {
     let result = call(
         &fx.server,
         "resources/read",
-        json!({ "uri": "ourtex://vault/relationships/rel-jane" }),
+        json!({ "uri": "orchext://vault/relationships/rel-jane" }),
     )
     .await;
     let contents = result["contents"].as_array().unwrap();
@@ -400,7 +400,7 @@ async fn resources_read_out_of_scope_denies() {
     let err = call_err(
         &fx.server,
         "resources/read",
-        json!({ "uri": "ourtex://vault/memories/diary-0001" }),
+        json!({ "uri": "orchext://vault/memories/diary-0001" }),
     )
     .await;
     assert_eq!(err["code"], -32002);
@@ -418,7 +418,7 @@ async fn audit_log_grows_per_call() {
     )
     .await;
 
-    let report = ourtex_audit::verify(&fx.audit_path).await.unwrap();
+    let report = orchext_audit::verify(&fx.audit_path).await.unwrap();
     // At least one ok (list) and one denied (get diary-0001).
     assert!(report.total_entries >= 2);
 }
@@ -439,14 +439,14 @@ async fn subscribe_then_write_emits_notification() {
     let _ = call(
         &fx.server,
         "resources/subscribe",
-        json!({ "uri": "ourtex://vault/relationships/rel-jane" }),
+        json!({ "uri": "orchext://vault/relationships/rel-jane" }),
     )
     .await;
 
     // Simulate the fs watcher firing for that document by driving the
     // server's emitter directly. This is what `watch::apply_and_notify`
     // would do after reindexing on a real fs change.
-    fx.server.emit_resource_updated("ourtex://vault/relationships/rel-jane");
+    fx.server.emit_resource_updated("orchext://vault/relationships/rel-jane");
 
     let note = tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv())
         .await
@@ -455,7 +455,7 @@ async fn subscribe_then_write_emits_notification() {
     assert_eq!(note.method, "notifications/resources/updated");
     assert_eq!(
         note.params.as_ref().and_then(|p| p.get("uri")).and_then(Value::as_str),
-        Some("ourtex://vault/relationships/rel-jane")
+        Some("orchext://vault/relationships/rel-jane")
     );
 }
 
@@ -464,7 +464,7 @@ async fn unsubscribed_uri_does_not_fire() {
     let (tx, mut rx) = mpsc::unbounded_channel::<Notification>();
     let fx = fixture_with_notifier(&["work", "public"], Some(tx)).await;
     // No subscribe. Emit should be a silent no-op.
-    fx.server.emit_resource_updated("ourtex://vault/relationships/rel-jane");
+    fx.server.emit_resource_updated("orchext://vault/relationships/rel-jane");
     let got = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await;
     assert!(got.is_err(), "expected timeout, got {got:?}");
 }
@@ -476,10 +476,10 @@ async fn type_level_subscription_matches_any_doc_in_type() {
     let _ = call(
         &fx.server,
         "resources/subscribe",
-        json!({ "uri": "ourtex://vault/relationships/" }),
+        json!({ "uri": "orchext://vault/relationships/" }),
     )
     .await;
-    fx.server.emit_resource_updated("ourtex://vault/relationships/rel-jane");
+    fx.server.emit_resource_updated("orchext://vault/relationships/rel-jane");
     let note = tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv())
         .await
         .expect("should arrive")
@@ -491,7 +491,7 @@ async fn type_level_subscription_matches_any_doc_in_type() {
 async fn unsubscribe_stops_notifications() {
     let (tx, mut rx) = mpsc::unbounded_channel::<Notification>();
     let fx = fixture_with_notifier(&["work", "public"], Some(tx)).await;
-    let uri = "ourtex://vault/relationships/rel-jane";
+    let uri = "orchext://vault/relationships/rel-jane";
     let _ = call(&fx.server, "resources/subscribe", json!({ "uri": uri })).await;
     let _ = call(&fx.server, "resources/unsubscribe", json!({ "uri": uri })).await;
     fx.server.emit_resource_updated(uri);
@@ -544,12 +544,12 @@ async fn fs_watcher_reindexes_and_notifies() {
         )
         .await
         .unwrap();
-    let ourtex_dir = root.join(".ourtex");
-    let index = Arc::new(Index::open(ourtex_dir.join("index.sqlite")).await.unwrap());
+    let orchext_dir = root.join(".orchext");
+    let index = Arc::new(Index::open(orchext_dir.join("index.sqlite")).await.unwrap());
     index.reindex_from(&*vault).await.unwrap();
-    let auth = Arc::new(TokenService::open(ourtex_dir.join("tokens.json")).await.unwrap());
+    let auth = Arc::new(TokenService::open(orchext_dir.join("tokens.json")).await.unwrap());
     let audit = Arc::new(
-        AuditWriter::open(ourtex_dir.join("audit.jsonl")).await.unwrap(),
+        AuditWriter::open(orchext_dir.join("audit.jsonl")).await.unwrap(),
     );
     let scope = Scope::new(["work".to_string()]).unwrap();
     let issued = auth
@@ -568,7 +568,7 @@ async fn fs_watcher_reindexes_and_notifies() {
         Server::new(vault.clone(), index.clone(), auth, audit, token).with_notifier(tx),
     );
 
-    let _watch = ourtex_mcp::watch::spawn(root.clone(), server.clone()).unwrap();
+    let _watch = orchext_mcp::watch::spawn(root.clone(), server.clone()).unwrap();
 
     // Subscribe to type-level so any new relationship doc fires.
     let _ = server
@@ -576,7 +576,7 @@ async fn fs_watcher_reindexes_and_notifies() {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "resources/subscribe",
-            "params": { "uri": "ourtex://vault/relationships/" }
+            "params": { "uri": "orchext://vault/relationships/" }
         }))
         .unwrap())
         .await;
@@ -612,11 +612,11 @@ async fn fs_watcher_reindexes_and_notifies() {
     .expect("watcher should fire within 5s")
     .expect("channel open");
     let uri = note.params.as_ref().and_then(|p| p.get("uri")).and_then(Value::as_str);
-    assert_eq!(uri, Some("ourtex://vault/relationships/rel-new"));
+    assert_eq!(uri, Some("orchext://vault/relationships/rel-new"));
 
     // And the index has it.
     let items = index
-        .list(ourtex_index::ListFilter {
+        .list(orchext_index::ListFilter {
             allowed_visibility: vec!["work".to_string()],
             ..Default::default()
         })

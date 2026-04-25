@@ -1,6 +1,6 @@
 [package]
-name = "ourtex-sync"
-description = "Client-side sync: RemoteVaultDriver + helpers for talking to ourtex-server"
+name = "orchext-sync"
+description = "Client-side sync: RemoteVaultDriver + helpers for talking to orchext-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,8 +11,8 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-ourtex-vault = { workspace = true }
-ourtex-crypto = { workspace = true }
+orchext-vault = { workspace = true }
+orchext-crypto = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
 tokio = { workspace = true }

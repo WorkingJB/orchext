@@ -1,5 +1,5 @@
 /// First non-empty `# heading`, falling back to the id.
-/// Duplicates `ourtex-index::title` — the function is tiny and both crates
+/// Duplicates `orchext-index::title` — the function is tiny and both crates
 /// want the same rule. Keeping them independent avoids exposing an internal
 /// helper from the index crate.
 pub fn derive_title(body: &str, fallback_id: &str) -> String {

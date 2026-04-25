@@ -1,15 +1,16 @@
 // Thin wrapper around the generated WASM bindings.
 //
 // wasm-pack emits an async `default()` initializer that fetches and
-// instantiates `ourtex_crypto_wasm_bg.wasm`. We cache the resulting
+// instantiates `orchext_crypto_wasm_bg.wasm`. We cache the resulting
 // promise so concurrent callers share one instance — React Strict Mode
 // and rapid route changes will trigger multiple calls otherwise.
 import init, {
   generateContentKey,
   generateSalt,
+  makeKeyCheck,
   unwrapContentKey,
   wrapContentKey,
-} from "./wasm/ourtex_crypto_wasm";
+} from "./wasm/orchext_crypto_wasm";
 
 let ready: Promise<void> | null = null;
 
@@ -44,5 +45,9 @@ export const crypto = {
   ): Promise<string> {
     await ensureReady();
     return unwrapContentKey(wrappedWire, passphrase, saltWire);
+  },
+  async makeKeyCheck(contentWire: string): Promise<string> {
+    await ensureReady();
+    return makeKeyCheck(contentWire);
   },
 };

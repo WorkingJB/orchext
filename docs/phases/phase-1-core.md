@@ -3,12 +3,12 @@
 Shipped crate details for the initial v1 build: vault format, audit
 log, tokens/auth, index, MCP server, and desktop app (including the
 Phase 2a multi-vault follow-up, since that work landed inside
-`ourtex-desktop`). Each section is frozen at the date shown; live
+`orchext-desktop`). Each section is frozen at the date shown; live
 status lives in [`../implementation-status.md`](../implementation-status.md).
 
 ---
 
-### `ourtex-vault` — 2026-04-18
+### `orchext-vault` — 2026-04-18
 
 The vault format parser and storage driver abstraction.
 
@@ -19,7 +19,7 @@ The vault format parser and storage driver abstraction.
 - `DocumentId` — newtype validated per `FORMAT.md` §3.3
 - `Visibility` — `Public | Work | Personal | Private | Custom(String)`; `is_private()` only true for the built-in `Private`
 - `VaultDriver` — async trait: `list`, `read`, `write`, `delete`
-- `PlainFileDriver` — disk-backed impl, skips `.ourtex/` and dot-dirs
+- `PlainFileDriver` — disk-backed impl, skips `.orchext/` and dot-dirs
 - `VaultError` — `thiserror` enum
 
 **Notable tests:**
@@ -27,11 +27,11 @@ The vault format parser and storage driver abstraction.
 - Round-trip preserves `x-*` extensions (FORMAT.md §3.4 commitment)
 - `private` hard floor: built-in `Private` reports `is_private()` true; `Custom("semi-private")` does not
 - `PlainFileDriver` rejects `write(id, doc)` when `id` doesn't match `doc.frontmatter.id`
-- `.ourtex/` directory is skipped by `list()`
+- `.orchext/` directory is skipped by `list()`
 
 **Decisions recorded here:** none — matches spec.
 
-### `ourtex-audit` — 2026-04-18
+### `orchext-audit` — 2026-04-18
 
 Append-only, hash-chained JSONL audit log. Matches `ARCHITECTURE.md` §5.7 and `MCP.md` §9.
 
@@ -56,7 +56,7 @@ Append-only, hash-chained JSONL audit log. Matches `ARCHITECTURE.md` §5.7 and `
 - Tamper detection identifies the specific seq where the chain broke
 - Empty log verifies cleanly (0 entries, no last seq/hash)
 
-### `ourtex-auth` — 2026-04-18
+### `orchext-auth` — 2026-04-18
 
 Token service: issuance, Argon2id hashing, scope eval including the `private` hard floor, revocation, expiry, retrieval limits.
 
@@ -74,7 +74,7 @@ Token service: issuance, Argon2id hashing, scope eval including the `private` ha
 
 **Decisions recorded here:**
 
-- **Secret format: `otx_` + base64url-no-pad of 32 random bytes.** Matches `MCP.md` §3.1 intent; 43-char payload, url-safe for stdio copy-paste.
+- **Secret format: `ocx_` + base64url-no-pad of 32 random bytes.** Matches `MCP.md` §3.1 intent; 43-char payload, url-safe for stdio copy-paste.
 - **Token ID: `tok_` + base64url-no-pad of 12 random bytes.** Separate from the secret, goes in audit logs, never leaks secret bits.
 - **Atomic persistence via write-temp + rename.** Prevents torn JSON files under crash.
 - **`Scope::narrow_to` is intersection-only.** Can never widen — matches `MCP.md` §3.2.
@@ -90,7 +90,7 @@ Token service: issuance, Argon2id hashing, scope eval including the `private` ha
 
 ---
 
-### `ourtex-index` — 2026-04-18
+### `orchext-index` — 2026-04-18
 
 Full-text search + tag/type filter + link graph over the vault. Backed
 by SQLite with FTS5.
@@ -111,7 +111,7 @@ by SQLite with FTS5.
 - **Async wrapper via `tokio::task::spawn_blocking`.** rusqlite is synchronous; `Arc<Mutex<Connection>>` (std mutex, since we're in blocking context) serializes access within a process.
 - **Contentful FTS5 table, not external-content.** Slight storage duplication (body is in both `documents` and `search`); huge simplicity win — no triggers, straightforward upsert.
 - **`documents` + `tags` + `links` normalized.** `ON DELETE CASCADE` drops tags and links when a document is removed; FTS row is dropped explicitly.
-- **Scope filtering is an `IN` clause on `visibility`.** Passing `allowed_visibility` is how callers apply the `private` hard floor: if `"private"` isn't in the set, no `private` documents surface. Consistent with how `ourtex-auth` thinks about scope.
+- **Scope filtering is an `IN` clause on `visibility`.** Passing `allowed_visibility` is how callers apply the `private` hard floor: if `"private"` isn't in the set, no `private` documents surface. Consistent with how `orchext-auth` thinks about scope.
 - **Title extraction is `# Heading` → first non-empty H1, fallback to `id`.** Matches MCP.md §5.1.
 - **`WAL` journal mode enabled.** Better concurrency (the desktop UI might read while MCP writes), negligible cost.
 
@@ -122,7 +122,7 @@ by SQLite with FTS5.
 - `upsert_replaces_tags_and_links`: re-upserting a document replaces (not unions) its tag and link sets.
 - `reindex_from_vault_and_search`: reindex produces correct `IndexStats`, subsequent search returns hits.
 
-### `ourtex-mcp` — 2026-04-19
+### `orchext-mcp` — 2026-04-19
 
 JSON-RPC 2.0 MCP server over stdio. Wires the four backing services
 (`vault`, `index`, `auth`, `audit`) behind the v1 surface defined by
@@ -139,7 +139,7 @@ JSON-RPC 2.0 MCP server over stdio. Wires the four backing services
 - `rpc::{Request, Response, Notification, RpcError, Id}` — wire
   envelope types.
 
-**Binary:** `ourtex-mcp --token <TOKEN> --vault <VAULT_DIR>`. Reads
+**Binary:** `orchext-mcp --token <TOKEN> --vault <VAULT_DIR>`. Reads
 line-delimited JSON from stdin, writes line-delimited JSON to stdout.
 
 **Implemented methods:** `initialize`, `initialized` (notification),
@@ -240,16 +240,16 @@ the `context.` namespace (D3). Results include provenance
   URIs returns `-32002`.
 - `audit_log_grows_per_call`: both an ok `context.list` and a
   denied `context.get` append chained JSONL entries that
-  `ourtex_audit::verify` accepts.
+  `orchext_audit::verify` accepts.
 
 **Binary subcommands:**
 
-- `ourtex-mcp init --vault <DIR> [--label <L>] [--scope work,public]
+- `orchext-mcp init --vault <DIR> [--label <L>] [--scope work,public]
   [--ttl-days N]` — creates the vault skeleton (seed type dirs +
-  `.ourtex/`), issues an initial token, and prints (a) the token
+  `.orchext/`), issues an initial token, and prints (a) the token
   secret (shown once), (b) the launch command, (c) a
   ready-to-paste Claude Desktop `mcpServers` entry.
-- `ourtex-mcp serve --vault <DIR> --token <TOKEN>` — the JSON-RPC
+- `orchext-mcp serve --vault <DIR> --token <TOKEN>` — the JSON-RPC
   server itself. Reindexes at startup, spawns the fs watcher,
   then enters a `tokio::select!` loop over `(stdin lines,
   notification channel)`. On stdin EOF it drains any in-flight
@@ -269,18 +269,18 @@ the `context.` namespace (D3). Results include provenance
 
 ---
 
-### `ourtex-desktop` — 2026-04-19
+### `orchext-desktop` — 2026-04-19
 
 Tauri 2 desktop app (Rust backend + React/Vite/TS/Tailwind frontend).
 Lives at `apps/desktop/`; the Rust side is `apps/desktop/src-tauri/`
-(workspace member `ourtex-desktop`) and the frontend at
+(workspace member `orchext-desktop`) and the frontend at
 `apps/desktop/src/`.
 
 **Screens:**
 
 - **Vault picker** (first run or "Switch vault"): directory dialog via
   `tauri-plugin-dialog`; `vault_open` creates the seed type dirs +
-  `.ourtex/`, opens the persistent stores, runs a full `reindex_from`,
+  `.orchext/`, opens the persistent stores, runs a full `reindex_from`,
   and returns a `VaultInfo` snapshot.
 - **Documents**: three-pane layout — types sidebar, document list,
   detail editor. New / save / delete with frontmatter fields (id,
@@ -293,12 +293,12 @@ Lives at `apps/desktop/`; the Rust side is `apps/desktop/src-tauri/`
   redacted `PublicTokenInfo` remains on screen.
 - **Audit**: reverse-chronological table of `AuditEntry` rows with a
   "chain verified" / "chain broken" badge backed by
-  `ourtex_audit::verify`.
+  `orchext_audit::verify`.
 
 **Commands (Tauri backend):** `vault_open`, `vault_info`, `doc_list`,
 `doc_read`, `doc_write`, `doc_delete`, `token_list`, `token_issue`,
 `token_revoke`, `audit_list`. All are `async` and call the existing
-crates directly — no subprocess to `ourtex-mcp`.
+crates directly — no subprocess to `orchext-mcp`.
 
 **Decisions recorded here:**
 
@@ -307,7 +307,7 @@ crates directly — no subprocess to `ourtex-mcp`.
   under a short read lock, then do their work without holding the
   lock, so concurrent requests don't serialize behind a slow command.
 - **Frontend calls crates through Tauri commands, not an in-process
-  MCP server.** An alternative was to embed `ourtex-mcp` and talk to
+  MCP server.** An alternative was to embed `orchext-mcp` and talk to
   it over stdio internally. Direct calls are simpler, keep the MCP
   surface authoritative for agents (who are external by definition),
   and avoid re-serializing every payload through JSON-RPC twice.
@@ -316,7 +316,7 @@ crates directly — no subprocess to `ourtex-mcp`.
   the secret in a yellow dismissable panel with a copy button.
   After dismiss, `token_list` no longer has access to the secret
   (it was never stored in plaintext — Argon2id hash only).
-- **Reindex on vault open.** Same argument as ourtex-mcp: watcher
+- **Reindex on vault open.** Same argument as orchext-mcp: watcher
   (not yet wired in the desktop — see below) only fires on changes
   *after* it starts, so any docs edited outside the app need a
   ground-truth rebuild to surface in list/search.
@@ -341,7 +341,7 @@ crates directly — no subprocess to `ourtex-mcp`.
 **Follow-ons shipped since MVP (2026-04-19):**
 
 - **Fs watcher wired** — `src-tauri/src/watch.rs` mirrors the
-  `ourtex-mcp` pattern: notify watcher owns path→(type,id), calls
+  `orchext-mcp` pattern: notify watcher owns path→(type,id), calls
   `index.upsert`/`remove`, emits Tauri event `vault://changed`.
   `DocumentsView` and `GraphView` subscribe and auto-refresh. No
   debouncing; bursts may trigger several events per logical write.
@@ -361,7 +361,7 @@ crates directly — no subprocess to `ourtex-mcp`.
   endpoint via `reqwest` (no Rust SDK exists). Model pinned to
   `claude-haiku-4-5` for cost. Scope cuts: no streaming, no tool
   use (agent returns a JSON array of seed docs in a finalize turn),
-  single-session only. API key stored in `.ourtex/settings.json`
+  single-session only. API key stored in `.orchext/settings.json`
   alongside `tokens.json` — plaintext at rest, same threat model
   as the existing token file, move to OS keychain in a follow-up.
 
@@ -369,7 +369,7 @@ crates directly — no subprocess to `ourtex-mcp`.
 
 - **Obsidian import** (§v1 item 5) — explicitly cut from the MVP;
   not started.
-- **API key in plaintext** — `.ourtex/settings.json` is not
+- **API key in plaintext** — `.orchext/settings.json` is not
   encrypted. Fine for local dev, but should move to
   `tauri-plugin-stronghold` / OS keychain before any distribution
   build.
@@ -383,7 +383,7 @@ The desktop app now tracks N registered vaults and switches between
 them from the header. Unblocks use case 5 locally (personal ↔ any
 other local vault).
 
-- **Registry at `~/.ourtex/workspaces.json`** — per-install client
+- **Registry at `~/.orchext/workspaces.json`** — per-install client
   state (not part of the vault format; see `FORMAT.md` §11.1). JSON
   with `{version, active, workspaces:[{id, name, kind, path,
   added_at}]}`. Atomic write via temp + rename. Workspace IDs are
@@ -419,7 +419,7 @@ other local vault).
   fetch cleanly. Avoided threading a workspace prop through every
   child; React keying is the lighter touch.
 - **Workspace isolation** is path-based (same as v1): each vault's
-  `.ourtex/` holds its own tokens, audit, index, proposals, settings.
+  `.orchext/` holds its own tokens, audit, index, proposals, settings.
   No cross-workspace data paths added.
 
 **Decisions recorded here:**

@@ -2,7 +2,7 @@
 
 Opened 2026-04-22, closed 2026-04-25. Adds `apps/web` (Vite + React +
 Tailwind) alongside `apps/desktop`, plus a browser-facing
-`ourtex-crypto-wasm` wrapper so the unlock flow runs entirely
+`orchext-crypto-wasm` wrapper so the unlock flow runs entirely
 client-side. Pulled ahead of 2b.5 (MCP HTTP/SSE + OAuth PKCE +
 `context.propose`) so a shareable URL lands sooner; depended only on
 2b.2's HTTP surface and 2b.3's crypto, both shipped.
@@ -12,7 +12,7 @@ live status in [`../implementation-status.md`](../implementation-status.md).
 
 ---
 
-### `ourtex-crypto` — 2026-04-22 (Phase 2b.4 delta)
+### `orchext-crypto` — 2026-04-22 (Phase 2b.4 delta)
 
 No API change. The crate now compiles clean to `wasm32-unknown-unknown`
 without a feature flag:
@@ -28,11 +28,11 @@ Argon2id and XChaCha20-Poly1305 are pure-CPU + alloc and need no
 additional gating. Native builds and the 13-test unit suite are
 unchanged.
 
-### `ourtex-crypto-wasm` — 2026-04-22 (new, Phase 2b.4)
+### `orchext-crypto-wasm` — 2026-04-22 (new, Phase 2b.4)
 
 Thin wasm-bindgen wrapper. Exists as its own crate rather than a
-feature on `ourtex-crypto` so wasm-bindgen's dependency tree doesn't
-leak into native consumers (`ourtex-server`, `ourtex-sync`, desktop).
+feature on `orchext-crypto` so wasm-bindgen's dependency tree doesn't
+leak into native consumers (`orchext-server`, `orchext-sync`, desktop).
 
 **Public API (JS surface, all take/return base64url-nopad strings):**
 
@@ -51,7 +51,7 @@ ES-module bundle that Vite consumes directly.
 
 **Decisions recorded here:**
 
-- **Separate wrapper crate, not a feature on `ourtex-crypto`.** The
+- **Separate wrapper crate, not a feature on `orchext-crypto`.** The
   core crate stays free of `wasm-bindgen` and its `js-sys` /
   `wasm-bindgen-macro` toolchain, so server and desktop builds don't
   pay for machinery they never use. Cost: one extra crate in the
@@ -68,13 +68,13 @@ ES-module bundle that Vite consumes directly.
 ### `apps/web` — 2026-04-22 (new, Phase 2b.4)
 
 Sibling to `apps/desktop`. Same toolchain (Vite + React 18 + TS +
-Tailwind), no Tauri — hits `ourtex-server` directly over HTTPS.
+Tailwind), no Tauri — hits `orchext-server` directly over HTTPS.
 
 **What's wired (2026-04-22):**
 
 - **Login / signup** — `LoginView.tsx` toggles between
   `POST /v1/auth/login` and `POST /v1/auth/signup`. Session token
-  held in `localStorage` under `ourtex.session.v1`; bearer attached
+  held in `localStorage` under `orchext.session.v1`; bearer attached
   by the shared `request()` helper in `api.ts`.
 - **Tenant picker** — `TenantPicker.tsx` hits `GET /v1/tenants`.
   Single-membership accounts (default for personal signup) auto-pick
@@ -95,7 +95,7 @@ Tailwind), no Tauri — hits `ourtex-server` directly over HTTPS.
   tenant switch both call `DELETE /session-key` on the outgoing
   tenant before dropping the token.
 - **Dev ergonomics** — Vite proxies `/v1/*` + `/healthz` to
-  `http://localhost:8080` (override via `OURTEX_SERVER_URL`);
+  `http://localhost:8080` (override via `ORCHEXT_SERVER_URL`);
   `predev` and `prebuild` npm hooks run `wasm-pack build` so the
   WASM blob is always fresh.
 
@@ -124,14 +124,14 @@ Tailwind), no Tauri — hits `ourtex-server` directly over HTTPS.
 
 **Bundle footprint (prod build, 2026-04-22):**
 
-- `ourtex_crypto_wasm_bg.wasm` — 82 KB
+- `orchext_crypto_wasm_bg.wasm` — 82 KB
 - `index.js` — 162 KB (52 KB gzipped)
 - `index.css` — 8 KB (2 KB gzipped)
 
 ### Test coverage
 
 No new Rust unit tests this phase — the four WASM-exposed functions
-are thin passthroughs to `ourtex-crypto` which already has 13/13
+are thin passthroughs to `orchext-crypto` which already has 13/13
 passing unit tests covering every code path. `apps/web` has no test
 suite yet; the right time to add React/Vitest tests is when the
 write path lands and starts accumulating non-trivial UI state
@@ -158,7 +158,7 @@ The editor is keyed by `${id}@${version}` so a successful save remounts
 it with the post-save version stamp — same pattern desktop uses.
 
 **Server note:** the PUT handler re-parses + re-canonicalizes via
-`ourtex_vault::Document`, so `buildSource`'s YAML doesn't have to be
+`orchext_vault::Document`, so `buildSource`'s YAML doesn't have to be
 byte-exact canonical form. It only needs to round-trip the frontmatter
 fields — which the node-side `buildSource` → `parseSource` smoke test
 confirms.
@@ -167,7 +167,7 @@ Bundle footprint after `js-yaml`:
 
 - `index.js` — 210 KB (68 KB gzipped)
 - `index.css` — 11 KB (3 KB gzipped)
-- `ourtex_crypto_wasm_bg.wasm` — 82 KB
+- `orchext_crypto_wasm_bg.wasm` — 82 KB
 
 ### Tokens + audit views — 2026-04-22
 
@@ -196,7 +196,7 @@ Bundle footprint after these views:
 
 - `index.js` — 220 KB (70 KB gzipped)
 - `index.css` — 13 KB (3 KB gzipped)
-- `ourtex_crypto_wasm_bg.wasm` — 82 KB
+- `orchext_crypto_wasm_bg.wasm` — 82 KB
 
 ### Cuts at close (2026-04-25)
 
@@ -217,7 +217,7 @@ Bundle footprint after these views:
 
 ### Cuts already made
 
-- **No `wasm` feature flag on `ourtex-crypto`.** `OsRng` +
+- **No `wasm` feature flag on `orchext-crypto`.** `OsRng` +
   target-gated `getrandom[js]` covers every wasm requirement
   without forking the native build path.
 - **No wasm-opt.** `package.metadata.wasm-pack.profile.release`

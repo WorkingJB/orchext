@@ -19,11 +19,11 @@
 
 use crate::watch::WatcherHandle;
 use crate::workspaces::{self, Registry, WorkspaceEntry};
-use ourtex_audit::AuditWriter;
-use ourtex_auth::TokenService;
-use ourtex_index::Index;
-use ourtex_sync::{RemoteClient, RemoteConfig, RemoteVaultDriver};
-use ourtex_vault::{PlainFileDriver, VaultDriver};
+use orchext_audit::AuditWriter;
+use orchext_auth::TokenService;
+use orchext_index::Index;
+use orchext_sync::{RemoteClient, RemoteConfig, RemoteVaultDriver};
+use orchext_vault::{PlainFileDriver, VaultDriver};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -218,7 +218,7 @@ pub async fn open_workspace(entry: &WorkspaceEntry) -> Result<OpenVault, String>
 
 async fn open_local(entry: &WorkspaceEntry) -> Result<OpenVault, String> {
     let root = entry.path.clone();
-    // Canonicalize so fs-watch paths line up (matches ourtex-mcp's
+    // Canonicalize so fs-watch paths line up (matches orchext-mcp's
     // behavior on macOS where `/tmp` is a symlink).
     tokio::fs::create_dir_all(&root)
         .await
@@ -227,13 +227,13 @@ async fn open_local(entry: &WorkspaceEntry) -> Result<OpenVault, String> {
         .canonicalize()
         .map_err(|e| format!("canonicalize: {e}"))?;
 
-    let ourtex_dir = root.join(".ourtex");
-    tokio::fs::create_dir_all(&ourtex_dir)
+    let orchext_dir = root.join(".orchext");
+    tokio::fs::create_dir_all(&orchext_dir)
         .await
-        .map_err(|e| format!("create .ourtex: {e}"))?;
+        .map_err(|e| format!("create .orchext: {e}"))?;
 
     // Seed type directories so an empty vault still has a navigable
-    // shape for the UI. Matches `ourtex-mcp init`.
+    // shape for the UI. Matches `orchext-mcp init`.
     for t in SEED_TYPES {
         tokio::fs::create_dir_all(root.join(t))
             .await
@@ -242,7 +242,7 @@ async fn open_local(entry: &WorkspaceEntry) -> Result<OpenVault, String> {
 
     let vault: Arc<dyn VaultDriver> = Arc::new(PlainFileDriver::new(root.clone()));
     let index = Arc::new(
-        Index::open(ourtex_dir.join("index.sqlite"))
+        Index::open(orchext_dir.join("index.sqlite"))
             .await
             .map_err(|e| format!("open index: {e}"))?,
     );
@@ -251,12 +251,12 @@ async fn open_local(entry: &WorkspaceEntry) -> Result<OpenVault, String> {
         .await
         .map_err(|e| format!("reindex: {e}"))?;
     let auth = Arc::new(
-        TokenService::open(ourtex_dir.join("tokens.json"))
+        TokenService::open(orchext_dir.join("tokens.json"))
             .await
             .map_err(|e| format!("open tokens: {e}"))?,
     );
     let audit = Arc::new(
-        AuditWriter::open(ourtex_dir.join("audit.jsonl"))
+        AuditWriter::open(orchext_dir.join("audit.jsonl"))
             .await
             .map_err(|e| format!("open audit: {e}"))?,
     );

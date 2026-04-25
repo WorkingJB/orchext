@@ -127,7 +127,7 @@ export function OnboardingView({
           <p className="text-sm text-neutral-600 mb-4">
             Onboarding uses Claude Haiku 4.5 to draft your initial context
             documents. Paste your Anthropic API key to continue. The key is
-            stored in <code>.ourtex/settings.json</code> in this vault.
+            stored in <code>.orchext/settings.json</code> in this vault.
           </p>
           <input
             type="password"

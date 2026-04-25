@@ -1,13 +1,13 @@
 // Session bootstrap for the web client.
 //
 // Phase 2b.5 moved the session token off `localStorage` and onto an
-// httpOnly `ourtex_session` cookie issued by the server. This module
+// httpOnly `orchext_session` cookie issued by the server. This module
 // holds only the *display-only* account profile loaded from
 // `/v1/auth/me`; the bearer secret never reaches JS.
 //
-// CSRF: the server also sets a non-HttpOnly `ourtex_csrf` cookie on
+// CSRF: the server also sets a non-HttpOnly `orchext_csrf` cookie on
 // login/signup. `getCsrfToken()` reads that cookie value and the API
-// client mirrors it back as `X-Ourtex-CSRF` on state-changing
+// client mirrors it back as `X-Orchext-CSRF` on state-changing
 // requests (double-submit pattern).
 
 export type SessionProfile = {
@@ -16,7 +16,7 @@ export type SessionProfile = {
   displayName: string;
 };
 
-const CSRF_COOKIE = "ourtex_csrf";
+const CSRF_COOKIE = "orchext_csrf";
 
 export function getCsrfToken(): string | null {
   const all = document.cookie.split(";");

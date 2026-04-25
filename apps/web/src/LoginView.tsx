@@ -46,7 +46,7 @@ export function LoginView({
         onSubmit={submit}
         className="w-full max-w-sm bg-white border border-neutral-200 rounded-lg p-6 shadow-sm"
       >
-        <h1 className="text-xl font-semibold mb-1">Ourtex</h1>
+        <h1 className="text-xl font-semibold mb-1">Orchext</h1>
         <p className="text-sm text-neutral-500 mb-5">
           {mode === "login" ? "Sign in to your workspace." : "Create an account."}
         </p>

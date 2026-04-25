@@ -1,4 +1,4 @@
-use ourtex_audit::{verify, Actor, AuditError, AuditRecord, AuditWriter, Iter, Outcome};
+use orchext_audit::{verify, Actor, AuditError, AuditRecord, AuditWriter, Iter, Outcome};
 use tempfile::TempDir;
 
 fn record(action: &str, actor: Actor, outcome: Outcome) -> AuditRecord {

@@ -9,7 +9,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use ourtex_server::{router, AppState};
+use orchext_server::{router, AppState};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -24,7 +24,7 @@ async fn read_json(body: Body) -> Value {
 fn signup_req(email: &str, password: &str) -> Request<Body> {
     Request::builder()
         .method("POST")
-        .uri("/v1/auth/signup")
+        .uri("/v1/auth/native/signup")
         .header("content-type", "application/json")
         .body(Body::from(
             json!({ "email": email, "password": password }).to_string(),
@@ -81,7 +81,7 @@ My manager at Acme.\n";
 
 #[sqlx::test(migrations = "./migrations")]
 async fn vault_write_read_roundtrip(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap_user(&app, "vault@example.com").await;
 
     // PUT writes the doc.
@@ -119,14 +119,14 @@ async fn vault_write_read_roundtrip(db: PgPool) {
     assert_eq!(read.status(), StatusCode::OK);
     let body = read_json(read.into_body()).await;
     let source = body["source"].as_str().unwrap();
-    let parsed = ourtex_vault::Document::parse(source).unwrap();
+    let parsed = orchext_vault::Document::parse(source).unwrap();
     assert_eq!(parsed.frontmatter.id.as_str(), "rel-jane-smith");
     assert_eq!(parsed.frontmatter.tags, vec!["manager", "acme"]);
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn vault_version_conflict(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap_user(&app, "conflict@example.com").await;
 
     // Initial write.
@@ -174,7 +174,7 @@ async fn vault_version_conflict(db: PgPool) {
 async fn vault_cross_tenant_is_not_found(db: PgPool) {
     // A second user cannot read another user's tenant's docs — the
     // tenant middleware rejects them before any doc handler runs.
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (_alice_secret, alice_tid) = bootstrap_user(&app, "alice@example.com").await;
     let (bob_secret, _bob_tid) = bootstrap_user(&app, "bob@example.com").await;
 
@@ -195,7 +195,7 @@ async fn vault_cross_tenant_is_not_found(db: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn index_search_finds_content(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap_user(&app, "search@example.com").await;
 
     // Write two docs.
@@ -293,7 +293,7 @@ Confidential reflection on the Acme project.\n";
 
 #[sqlx::test(migrations = "./migrations")]
 async fn audit_chain_records_writes(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap_user(&app, "audit@example.com").await;
 
     // One write → one `vault.write` entry at seq 0.
@@ -352,7 +352,7 @@ async fn audit_chain_records_writes(db: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn tokens_issue_and_revoke(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap_user(&app, "tokens@example.com").await;
 
     // Issue a token.
@@ -379,7 +379,7 @@ async fn tokens_issue_and_revoke(db: PgPool) {
     assert_eq!(issue.status(), StatusCode::CREATED);
     let body = read_json(issue.into_body()).await;
     let token_id = body["token"]["id"].as_str().unwrap().to_string();
-    assert!(body["secret"].as_str().unwrap().starts_with("otx_"));
+    assert!(body["secret"].as_str().unwrap().starts_with("ocx_"));
 
     // List contains it.
     let list = app

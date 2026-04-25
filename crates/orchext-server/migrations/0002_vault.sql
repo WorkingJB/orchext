@@ -1,7 +1,7 @@
 -- Phase 2b.2 schema: vault documents, tag/link graph, audit chain, MCP tokens.
 --
--- Same shape as the local stack (ourtex-vault + ourtex-index + ourtex-audit +
--- ourtex-auth) but rehomed in Postgres and keyed by tenant_id. Frontmatter
+-- Same shape as the local stack (orchext-vault + orchext-index + orchext-audit +
+-- orchext-auth) but rehomed in Postgres and keyed by tenant_id. Frontmatter
 -- is preserved verbatim as JSONB so the round-trip contract (`FORMAT.md`
 -- §3.4) survives a server trip — unknown / x-* fields come back intact.
 
@@ -22,7 +22,7 @@ CREATE TABLE documents (
 CREATE INDEX documents_tenant_type_idx       ON documents (tenant_id, type_);
 CREATE INDEX documents_tenant_visibility_idx ON documents (tenant_id, visibility);
 
--- Full-text column + GIN index, mirroring the FTS5 shape in ourtex-index.
+-- Full-text column + GIN index, mirroring the FTS5 shape in orchext-index.
 -- `title` gets the same weight as the body today; adjust with `setweight`
 -- later if ranking turns out to need it.
 ALTER TABLE documents ADD COLUMN tsv tsvector
@@ -49,7 +49,7 @@ CREATE TABLE doc_links (
 );
 CREATE INDEX doc_links_target_idx ON doc_links (tenant_id, target);
 
--- Per-tenant audit chain. Matches `ourtex-audit` field-for-field so the
+-- Per-tenant audit chain. Matches `orchext-audit` field-for-field so the
 -- same hash helper can verify the chain later; the only expansion is that
 -- `actor` accepts `account:<uuid>` in addition to `owner` / `tok:<id>`.
 CREATE TABLE audit_entries (
@@ -66,7 +66,7 @@ CREATE TABLE audit_entries (
     PRIMARY KEY (tenant_id, seq)
 );
 
--- MCP tokens scoped to a tenant. Shape mirrors `ourtex-auth::StoredToken`,
+-- MCP tokens scoped to a tenant. Shape mirrors `orchext-auth::StoredToken`,
 -- but the secret is Argon2id-hashed at rest and looked up by the same
 -- prefix trick used for user sessions.
 CREATE TABLE mcp_tokens (

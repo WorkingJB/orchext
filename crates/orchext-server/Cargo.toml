@@ -1,6 +1,6 @@
 [package]
-name = "ourtex-server"
-description = "Ourtex server — HTTP API for hosted and self-hosted deployments"
+name = "orchext-server"
+description = "Orchext server — HTTP API for hosted and self-hosted deployments"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,13 +11,14 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [[bin]]
-name = "ourtex-server"
+name = "orchext-server"
 path = "src/main.rs"
 
 [dependencies]
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
+tower_governor = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 
@@ -34,8 +35,8 @@ base64 = { workspace = true }
 subtle = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
-ourtex-vault = { workspace = true }
-ourtex-crypto = { workspace = true }
+orchext-vault = { workspace = true }
+orchext-crypto = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

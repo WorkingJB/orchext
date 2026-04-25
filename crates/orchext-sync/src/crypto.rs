@@ -23,6 +23,7 @@ pub struct CryptoState {
 struct InitCryptoRequest {
     kdf_salt: String,
     wrapped_content_key: String,
+    key_check: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,11 +52,13 @@ impl RemoteClient {
         &self,
         kdf_salt: &str,
         wrapped_content_key: &str,
+        key_check: &str,
     ) -> Result<InitCryptoResponse> {
         let url = self.config.tenant_url("vault/init-crypto")?;
         let body = InitCryptoRequest {
             kdf_salt: kdf_salt.to_string(),
             wrapped_content_key: wrapped_content_key.to_string(),
+            key_check: key_check.to_string(),
         };
         self.request_json(Method::POST, url, Some(&body)).await
     }

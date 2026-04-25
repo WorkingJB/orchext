@@ -1,15 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/ourtex-vault",
-    "crates/ourtex-index",
-    "crates/ourtex-auth",
-    "crates/ourtex-audit",
-    "crates/ourtex-mcp",
-    "crates/ourtex-server",
-    "crates/ourtex-sync",
-    "crates/ourtex-crypto",
-    "crates/ourtex-crypto-wasm",
+    "crates/orchext-vault",
+    "crates/orchext-index",
+    "crates/orchext-auth",
+    "crates/orchext-audit",
+    "crates/orchext-mcp",
+    "crates/orchext-server",
+    "crates/orchext-sync",
+    "crates/orchext-crypto",
+    "crates/orchext-crypto-wasm",
     "apps/desktop/src-tauri",
 ]
 
@@ -18,7 +18,7 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 rust-version = "1.75"
-repository = "https://github.com/ourtex-app/ourtex"
+repository = "https://github.com/orchext-app/orchext"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["fs", "rt", "rt-multi-thread", "macros", "io-util", "io-std", "sync", "time"] }
@@ -40,6 +40,7 @@ notify = { version = "6", default-features = false, features = ["macos_fsevent"]
 axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio", "query", "matched-path"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["trace", "cors"] }
+tower_governor = "0.4"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "chrono", "uuid", "migrate"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
@@ -47,12 +48,12 @@ url = { version = "2", features = ["serde"] }
 chacha20poly1305 = "0.10"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
-ourtex-vault = { path = "crates/ourtex-vault", version = "0.1.0" }
-ourtex-index = { path = "crates/ourtex-index", version = "0.1.0" }
-ourtex-auth = { path = "crates/ourtex-auth", version = "0.1.0" }
-ourtex-audit = { path = "crates/ourtex-audit", version = "0.1.0" }
-ourtex-sync = { path = "crates/ourtex-sync", version = "0.1.0" }
-ourtex-crypto = { path = "crates/ourtex-crypto", version = "0.1.0" }
+orchext-vault = { path = "crates/orchext-vault", version = "0.1.0" }
+orchext-index = { path = "crates/orchext-index", version = "0.1.0" }
+orchext-auth = { path = "crates/orchext-auth", version = "0.1.0" }
+orchext-audit = { path = "crates/orchext-audit", version = "0.1.0" }
+orchext-sync = { path = "crates/orchext-sync", version = "0.1.0" }
+orchext-crypto = { path = "crates/orchext-crypto", version = "0.1.0" }
 
 [profile.release]
 lto = "thin"

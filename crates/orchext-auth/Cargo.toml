@@ -1,6 +1,6 @@
 [package]
-name = "ourtex-auth"
-description = "Ourtex token and permission service"
+name = "orchext-auth"
+description = "Orchext token and permission service"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-ourtex-vault = { workspace = true }
+orchext-vault = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,6 +1,6 @@
 [package]
-name = "ourtex-audit"
-description = "Ourtex append-only, hash-chained audit log"
+name = "orchext-audit"
+description = "Orchext append-only, hash-chained audit log"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

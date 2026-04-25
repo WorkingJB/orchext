@@ -1,18 +1,19 @@
-//! Browser-facing wrapper around `ourtex-crypto`.
+//! Browser-facing wrapper around `orchext-crypto`.
 //!
 //! Keeps the JS-exposed surface minimal and stateless: four top-level
 //! functions that take and return wire-form (base64url-nopad) strings.
 //! The master key is derived inside each call and dropped before return
 //! — nothing JS can hold is ever the raw passphrase-derived key.
 //!
-//! Wire-form outputs line up bit-for-bit with what `ourtex-crypto`
+//! Wire-form outputs line up bit-for-bit with what `orchext-crypto`
 //! emits on the server, so wrapped blobs round-trip between browser
 //! and Rust server without special-casing.
 
 #![forbid(unsafe_code)]
 
-use ourtex_crypto::{
+use orchext_crypto::{
     derive_master_key,
+    make_key_check,
     unwrap_content_key as rust_unwrap,
     wrap_content_key as rust_wrap,
     ContentKey, CryptoError, Salt, SealedBlob,
@@ -67,6 +68,16 @@ pub fn unwrap_content_key(
     let master = derive_master_key(passphrase, &salt).map_err(to_js)?;
     let content = rust_unwrap(&wrapped, &master).map_err(to_js)?;
     Ok(content.to_wire())
+}
+
+/// Build a key-check blob from a content key. Sent to the server on
+/// `init-crypto` so subsequent `publish_session_key` calls can be
+/// verified to be using the same key.
+#[wasm_bindgen(js_name = makeKeyCheck)]
+pub fn make_key_check_wasm(content_wire: &str) -> Result<String, JsError> {
+    let content = ContentKey::from_wire(content_wire).map_err(to_js)?;
+    let blob = make_key_check(&content).map_err(to_js)?;
+    Ok(blob.to_wire())
 }
 
 fn to_js(err: CryptoError) -> JsError {

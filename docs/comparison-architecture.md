@@ -1,8 +1,8 @@
-# Ourtex Architecture Review
+# Orchext Architecture Review
 
-Ourtex is a local-first, open core context management system for people who want to define, manage, and transport living context about themselves across AI agents.
+Orchext is a local-first, open core context management system for people who want to define, manage, and transport living context about themselves across AI agents.
 
-The product promise is simple: Ourtex is API and AI documentation, but for you. It gives users a portable personal context profile that they own, inspect, back up, and selectively connect to agents without reteaching every new AI system who they are, what they are working on, what they care about, or what boundaries apply.
+The product promise is simple: Orchext is API and AI documentation, but for you. It gives users a portable personal context profile that they own, inspect, back up, and selectively connect to agents without reteaching every new AI system who they are, what they are working on, what they care about, or what boundaries apply.
 
 ## Guiding Principles
 
@@ -15,11 +15,11 @@ The product promise is simple: Ourtex is API and AI documentation, but for you. 
 
 The recommended v1 direction is protocol-first and local-first.
 
-- Define a public Ourtex profile specification before overfitting the product to one app or cloud backend.
+- Define a public Orchext profile specification before overfitting the product to one app or cloud backend.
 - Store the canonical profile as a portable folder of Markdown files with structured metadata.
 - Build a desktop app that makes the profile approachable for non-technical users.
 - Ship a local API and MCP server so agents can connect to the profile through controlled access, not raw files.
-- Offer paid cloud sync and hosted coordination without requiring Ourtex cloud to hold plaintext user context.
+- Offer paid cloud sync and hosted coordination without requiring Orchext cloud to hold plaintext user context.
 - Keep individual users as the visible v1 product while designing internal ownership and grant models that can later support teams.
 
 Chosen defaults:
@@ -34,12 +34,12 @@ Chosen defaults:
 
 ## System Overview
 
-Ourtex should be organized around a shared core engine rather than several separate implementations of the same rules.
+Orchext should be organized around a shared core engine rather than several separate implementations of the same rules.
 
 ```mermaid
 flowchart LR
     User["User"] --> App["Desktop App"]
-    App --> Core["Ourtex Core Engine"]
+    App --> Core["Orchext Core Engine"]
     Core --> Vault["Local Markdown Vault"]
     Core --> Index["Local Index / Search Cache"]
     Core --> Grants["Grant Engine"]
@@ -48,7 +48,7 @@ flowchart LR
     MCP --> Core
     API --> Core
     App --> Sync["Encrypted Sync Client"]
-    Sync --> Cloud["Ourtex Cloud"]
+    Sync --> Cloud["Orchext Cloud"]
     Cloud --> Relay["Hosted Relay / Coordination"]
 ```
 
@@ -65,13 +65,13 @@ The core engine should be the policy enforcement point. The app, API, MCP server
 
 ## Profile And Vault Model
 
-The canonical Ourtex profile should be a normal folder that a user can inspect, copy, back up, sync, or version. Markdown should be the source of truth because it is durable, readable, and friendly to tools like Obsidian.
+The canonical Orchext profile should be a normal folder that a user can inspect, copy, back up, sync, or version. Markdown should be the source of truth because it is durable, readable, and friendly to tools like Obsidian.
 
 Recommended v0 structure:
 
 ```text
-ourtex-profile/
-  ourtex.yaml
+orchext-profile/
+  orchext.yaml
   context/
     identity/
     roles/
@@ -84,13 +84,13 @@ ourtex-profile/
     domain-knowledge/
     decisions/
   attachments/
-  .ourtex/
+  .orchext/
     index/
     audit/
     grants/
 ```
 
-`ourtex.yaml` should identify the profile, schema version, supported features, default sensitivity settings, and local vault configuration. Context documents should use Markdown with YAML frontmatter for machine-readable metadata.
+`orchext.yaml` should identify the profile, schema version, supported features, default sensitivity settings, and local vault configuration. Context documents should use Markdown with YAML frontmatter for machine-readable metadata.
 
 Example document frontmatter:
 
@@ -98,9 +98,9 @@ Example document frontmatter:
 ---
 id: ctx_goal_2026_company_launch
 type: goal
-title: Launch Ourtex v1
+title: Launch Orchext v1
 sensitivity: private
-tags: [ourtex, product, founder-context]
+tags: [orchext, product, founder-context]
 status: active
 updated_at: 2026-04-18
 related:
@@ -125,7 +125,7 @@ Recommended first-class context categories:
 
 The system should allow custom collections, but the default templates should be opinionated enough that a new user is not staring at a blank vault.
 
-Markdown files should support both standard Markdown links and wiki-style links. Ourtex should maintain a derived local graph index, but the links in the files should remain meaningful outside the app.
+Markdown files should support both standard Markdown links and wiki-style links. Orchext should maintain a derived local graph index, but the links in the files should remain meaningful outside the app.
 
 ## Local Application
 
@@ -133,7 +133,7 @@ The desktop app should be built with Tauri: a TypeScript frontend for the manage
 
 Primary app responsibilities:
 
-- Create and open Ourtex profiles.
+- Create and open Orchext profiles.
 - Provide friendly forms and templates for common context categories.
 - Let users browse, edit, link, tag, and archive context documents.
 - Manage agent grants.
@@ -145,16 +145,16 @@ The app should feel like managing a living profile, not like editing a repositor
 
 ## Local API And MCP Server
 
-Ourtex should expose two local integration surfaces.
+Orchext should expose two local integration surfaces.
 
 The MCP server is the primary agent interface. It should expose context as resources and tools, while enforcing grants before any content leaves the vault.
 
 Recommended MCP capabilities:
 
-- `ourtex.search_context`: query allowed context by text, category, tag, sensitivity, recency, and relationship.
-- `ourtex.read_context`: fetch a specific allowed document or fragment by ID.
-- `ourtex.list_context`: list allowed categories, documents, tags, and graph neighborhoods.
-- `ourtex.propose_context_change`: submit a suggested edit for user review.
+- `orchext.search_context`: query allowed context by text, category, tag, sensitivity, recency, and relationship.
+- `orchext.read_context`: fetch a specific allowed document or fragment by ID.
+- `orchext.list_context`: list allowed categories, documents, tags, and graph neighborhoods.
+- `orchext.propose_context_change`: submit a suggested edit for user review.
 
 The local HTTP API should mirror the same read/search behavior for non-MCP clients and local tooling. It should bind to loopback by default and require explicit user action before any LAN or remote exposure.
 
@@ -196,7 +196,7 @@ Privacy default:
 
 - Profile content is encrypted client-side before upload.
 - Content encryption keys remain on user devices or inside explicitly unlocked user sessions.
-- Ourtex cloud should not be able to decrypt profile content while all user devices are offline.
+- Orchext cloud should not be able to decrypt profile content while all user devices are offline.
 
 This creates a deliberate product tradeoff: always-on hosted agent access is not compatible with strict no-offline-decryption cloud storage. For v1, hosted integrations should return a locked or offline state when no approved user device or active unlocked session is available.
 
@@ -204,7 +204,7 @@ Future optional modes could include delegated hosted unlock for selected vaults,
 
 ## Security Model
 
-Ourtex stores sensitive personal context. It should be treated closer to a password manager or private notes app than a generic document editor.
+Orchext stores sensitive personal context. It should be treated closer to a password manager or private notes app than a generic document editor.
 
 Baseline controls:
 
@@ -228,7 +228,7 @@ MCP authorization should follow current MCP guidance:
 - No token passthrough.
 - HTTPS for non-loopback authorization endpoints.
 
-Prompt injection should be treated as a core threat. Context retrieved from a Ourtex profile is data, not instruction. A malicious or compromised note must not be able to expand its own permissions, instruct the agent to retrieve more data, or override the user-approved grant.
+Prompt injection should be treated as a core threat. Context retrieved from a Orchext profile is data, not instruction. A malicious or compromised note must not be able to expand its own permissions, instruct the agent to retrieve more data, or override the user-approved grant.
 
 Recommended mitigations:
 
@@ -252,7 +252,7 @@ The open source core should include everything required for users to own and run
 
 Open source:
 
-- Ourtex profile specification.
+- Orchext profile specification.
 - Local desktop app.
 - Local API server.
 - MCP server.

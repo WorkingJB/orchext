@@ -33,7 +33,7 @@ forward scope continues in
    route since the browser can't hold an Anthropic API key.
 3. **OS keychain — desktop.** Replace plaintext storage of the
    desktop's Anthropic API key and remote session tokens in
-   `~/.ourtex/` with the OS keychain (`keyring` crate). Required
+   `~/.orchext/` with the OS keychain (`keyring` crate). Required
    before any Phase 4 distribution build.
 
 ## What was originally elsewhere
@@ -105,8 +105,8 @@ this earns its keep beyond onboarding.
     issue invite.
   - Invite-redemption page: `/invite/:code` route (web) or
     paste-code modal (desktop).
-- **Crates touched:** `ourtex-server`, `ourtex-vault` (org seed
-  type), `ourtex-auth` (role-derived scopes already plumbed via
+- **Crates touched:** `orchext-server`, `orchext-vault` (org seed
+  type), `orchext-auth` (role-derived scopes already plumbed via
   `TenantContext::is_admin`), `apps/desktop`, `apps/web`.
 
 ### Web onboarding chat
@@ -123,8 +123,8 @@ this earns its keep beyond onboarding.
 
 ### OS keychain
 
-- **Desktop** (`ourtex-desktop` crate)
-  - Replace `~/.ourtex/anthropic_key` plaintext with `keyring`
+- **Desktop** (`orchext-desktop` crate)
+  - Replace `~/.orchext/anthropic_key` plaintext with `keyring`
     crate writes (per-user, per-host).
   - Replace remote-workspace session token storage in
     `workspaces.json` with keyring-backed lookup keyed by
@@ -133,7 +133,7 @@ this earns its keep beyond onboarding.
   - Migration: on first run, if a plaintext key exists, move it
     into the keychain and delete the plaintext copy. Log the
     migration to stderr.
-- **Crates touched:** `ourtex-desktop`. No server changes.
+- **Crates touched:** `orchext-desktop`. No server changes.
 
 ## Cuts — explicit
 

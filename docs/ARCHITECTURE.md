@@ -1,8 +1,8 @@
-# Ourtex Architecture
+# Orchext Architecture
 
 > API and AI documentation but for you.
 
-Ourtex lets a person define, manage, and transport a living set of context
+Orchext lets a person define, manage, and transport a living set of context
 files about themselves, and connect any AI agent to them — without handing
 every agent full access to everything, and without being locked into a
 single AI provider's memory system.
@@ -19,7 +19,7 @@ The design is evaluated against four principles, in order:
 
 1. **User first** — the user owns their data, their keys, and the
    relationship with every agent. No feature ships that weakens that.
-2. **Easy for everyone** — a non-technical person can install Ourtex,
+2. **Easy for everyone** — a non-technical person can install Orchext,
    onboard in a conversation, and connect an agent in under ten minutes.
 3. **Simple over fancy** — boring, auditable, well-understood tech wins
    over novel tech. Plain markdown beats a bespoke database.
@@ -51,8 +51,8 @@ MCP server, cloud sync) is a view or transport over that directory.
 └──────────────────────┬───────────────────────────────────────┘
                        │  reads / writes
                        ▼
-               ~/Ourtex/ (vault)
-               ├─ .ourtex/        config, keys, index, audit
+               ~/Orchext/ (vault)
+               ├─ .orchext/        config, keys, index, audit
                ├─ identity/
                ├─ goals/
                ├─ relationships/
@@ -126,7 +126,7 @@ Two trust tiers for writes:
   per-write prompt.
 - **External agents via MCP** are read-only by default. Writes go
   through `context.propose(id, patch)`, which lands in
-  `.ourtex/proposals/`. The desktop app surfaces proposals for user
+  `.orchext/proposals/`. The desktop app surfaces proposals for user
   review; approval merges them.
 
 **Why:** conversational onboarding is the easiest possible UX, and it
@@ -162,7 +162,7 @@ without requiring the desktop to be running, the cloud tier uses
   Optional Shamir split across trusted contacts. No server-side
   recovery.
 
-**Trust claim.** Ourtex cloud can decrypt context only during a session
+**Trust claim.** Orchext cloud can decrypt context only during a session
 that a user device authorized. Strict no-cloud-decryption is an opt-in
 mode for users who prefer it; their integrations fall back to
 relay-to-device (agent sees locked state when desktop is offline).
@@ -191,8 +191,8 @@ any text editor is a fallback UI.
 A directory on disk with a fixed top-level layout:
 
 ```
-~/Ourtex/
-├─ .ourtex/
+~/Orchext/
+├─ .orchext/
 │   ├─ config.json        user preferences, driver selection
 │   ├─ tokens.json        hashed agent tokens + scopes
 │   ├─ audit.log          append-only, hash-chained
@@ -260,15 +260,15 @@ The primary agent surface. Tools exposed in v1:
 Transport: stdio for local agents, HTTP/SSE for remote agents via the
 cloud relay.
 
-### 4.6 Ourtex Server (Phase 2 — self-host or SaaS)
+### 4.6 Orchext Server (Phase 2 — self-host or SaaS)
 
-A single axum service (`ourtex-server`) runs three deployment shapes
+A single axum service (`orchext-server`) runs three deployment shapes
 from one codebase (see `implementation-status.md` Phase 2 for the
 detailed plan):
 
 - **Personal synced** — the user's desktop and web clients read/write
   their own vault on the server.
-- **Team self-host** — a business runs `ourtex-server` on their own
+- **Team self-host** — a business runs `orchext-server` on their own
   infra (published Docker image + reference `docker-compose.yml`).
   Members connect from desktop or web.
 - **Team SaaS** — we operate the same image multi-tenant.
@@ -286,7 +286,7 @@ Shared concerns:
   state.
 - **Web client.** A Vite/React app that reuses `apps/desktop/src/`
   components and decrypts in-browser via a WASM-compiled
-  `ourtex-crypto`.
+  `orchext-crypto`.
 - **Agent access.** MCP over HTTP/SSE authenticated by OAuth 2.1
   bearer tokens (D4). Opaque tokens remain for loopback / stdio.
 
@@ -344,7 +344,7 @@ error cannot be used to detect `private` content.
 ### 5.4 Write surface
 
 External agents can never write directly. `context.propose` lands in
-`.ourtex/proposals/` as a patch against a specific document version.
+`.orchext/proposals/` as a patch against a specific document version.
 The desktop app shows a diff; user approves or rejects. The in-app
 onboarding agent is the single exception, and only while the user is
 watching.
@@ -356,10 +356,10 @@ untrusted sources. The core treats all document bodies as untrusted
 input when rendering to agents: no special escape sequences, no
 instruction-like phrasing is given elevated meaning.
 
-Ourtex attaches **provenance metadata** to every fragment it returns
+Orchext attaches **provenance metadata** to every fragment it returns
 (`document_id`, `visibility`, `updated_at`, `source`) and marks the
 body as untrusted input. Agents can use that metadata to defend
-themselves. Ourtex does **not** rewrite, strip, or re-label
+themselves. Orchext does **not** rewrite, strip, or re-label
 instruction-like content inside document bodies — sanitizing
 user-authored markdown is fragile and paternalistic.
 
@@ -419,9 +419,9 @@ extends this along three axes without breaking the v1 contract:
 
 - **Workspaces (Phase 2a).** A user's desktop app holds N workspaces,
   each with its own root, audit log, tokens, and index. A registry
-  at `~/.ourtex/workspaces.json` tracks them and the active one. The
+  at `~/.orchext/workspaces.json` tracks them and the active one. The
   in-app switcher moves between them. No schema change to the vault.
-- **Account + memberships (Phase 2b+).** A Ourtex account is a single
+- **Account + memberships (Phase 2b+).** A Orchext account is a single
   login (D8). A workspace can be local (today), remote-personal
   (Phase 2b), or remote-team (Phase 2c). Workspaces are independent
   — tokens, audit logs, and visibility labels do not cross.
@@ -485,7 +485,7 @@ short shape:
 | Phase | Delivers                                                | New crates                     |
 | ---   | ---                                                     | ---                            |
 | 2a    | Multi-vault desktop + workspace switcher                | —                              |
-| 2b    | `ourtex-server` + remote driver + web client + sync      | `ourtex-server`, `ourtex-sync`, `ourtex-crypto`, `apps/web` |
+| 2b    | `orchext-server` + remote driver + web client + sync      | `orchext-server`, `orchext-sync`, `orchext-crypto`, `apps/web` |
 | 2c    | Teams, memberships, `org/` context, roles               | —                              |
 
 Phase 2 decisions (D7–D12) are recorded in `implementation-status.md`
@@ -499,7 +499,7 @@ and supersede anything in `reconciled-v1-plan.md` that conflicts.
 - **Vault** — a directory of context files. One per workspace.
 - **Workspace** — a registered vault the client can switch to.
   Personal (local) or team (remote) in Phase 2+.
-- **Account** — a Ourtex login; may belong to N workspaces.
+- **Account** — a Orchext login; may belong to N workspaces.
 - **Document** — a single markdown file in a vault.
 - **Type** — a document's top-level category (`identity`, `goal`,
   …, `org` in Phase 2c).

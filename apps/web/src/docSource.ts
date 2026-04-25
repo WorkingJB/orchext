@@ -1,8 +1,8 @@
 // Build/parse the canonical document source (YAML frontmatter + markdown
-// body) that `ourtex-server`'s vault endpoints exchange.
+// body) that `orchext-server`'s vault endpoints exchange.
 //
 // The server re-parses and re-serializes whatever we PUT via
-// `ourtex-vault::Document`, so we don't have to match the canonical byte
+// `orchext-vault::Document`, so we don't have to match the canonical byte
 // form exactly — valid YAML plus a body is enough. On GET the server
 // always returns canonical form; `parseSource` only needs to handle that.
 import YAML from "js-yaml";

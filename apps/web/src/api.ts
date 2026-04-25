@@ -1,13 +1,13 @@
-// Thin HTTP client against ourtex-server. Mirrors the desktop `api`
+// Thin HTTP client against orchext-server. Mirrors the desktop `api`
 // object's surface where practical so shared views stay portable.
 //
-// Dev server proxies `/v1/*` → the ourtex-server (see vite.config.ts);
+// Dev server proxies `/v1/*` → the orchext-server (see vite.config.ts);
 // production builds will need either same-origin hosting or an explicit
-// OURTEX_API_BASE build-time constant.
+// ORCHEXT_API_BASE build-time constant.
 //
-// Auth: cookie-based. The browser sends `ourtex_session` (HttpOnly)
+// Auth: cookie-based. The browser sends `orchext_session` (HttpOnly)
 // automatically on every same-origin request; we attach
-// `X-Ourtex-CSRF` to the readable `ourtex_csrf` cookie value on
+// `X-Orchext-CSRF` to the readable `orchext_csrf` cookie value on
 // state-changing requests (double-submit pattern). All fetches use
 // `credentials: 'include'` so the cookies are actually sent.
 import { getCsrfToken } from "./session";
@@ -39,7 +39,7 @@ async function request<T>(
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (MUTATING.has(method)) {
     const csrf = getCsrfToken();
-    if (csrf) headers["X-Ourtex-CSRF"] = csrf;
+    if (csrf) headers["X-Orchext-CSRF"] = csrf;
   }
 
   const res = await fetch(path, {
@@ -68,19 +68,17 @@ export type AccountDto = {
   created_at: string;
 };
 
-export type SessionIssued = {
+// The browser auth endpoints intentionally do NOT return the bearer
+// secret. The session reaches the browser only through the HttpOnly
+// `orchext_session` cookie set in the same response — JS, the network
+// tab, and any XSS therefore can't read a transferable token.
+export type BrowserSession = {
   id: string;
-  /// Opaque session secret. Browser callers can ignore this — the
-  /// server also sets `ourtex_session` (HttpOnly) and `ourtex_csrf`
-  /// cookies in the same response. Native callers (desktop, agents)
-  /// use it as a bearer.
-  secret: string;
   expires_at: string;
-  csrf_token: string;
 };
 
-export type LoginResponse = { account: AccountDto; session: SessionIssued };
-export type SignupResponse = { account: AccountDto; session: SessionIssued };
+export type LoginResponse = { account: AccountDto; session: BrowserSession };
+export type SignupResponse = { account: AccountDto; session: BrowserSession };
 
 // ---------- Tenants ----------
 
@@ -266,12 +264,17 @@ export const api = {
   initCrypto: (
     tenantId: string,
     saltWire: string,
-    wrappedContentKey: string
+    wrappedContentKey: string,
+    keyCheck: string
   ) =>
     request<{ key_version: number }>(
       "POST",
       `/v1/t/${tenantId}/vault/init-crypto`,
-      { kdf_salt: saltWire, wrapped_content_key: wrappedContentKey }
+      {
+        kdf_salt: saltWire,
+        wrapped_content_key: wrappedContentKey,
+        key_check: keyCheck,
+      }
     ),
   publishSessionKey: (tenantId: string, contentKeyWire: string) =>
     request<{ expires_at: string; ttl_seconds: number }>(

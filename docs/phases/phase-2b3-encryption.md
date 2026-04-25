@@ -1,6 +1,6 @@
 # Phase 2b.3 — Encryption at rest + session-bound decryption (shipped)
 
-Shipped 2026-04-19. New `ourtex-crypto` crate (Argon2id KDF +
+Shipped 2026-04-19. New `orchext-crypto` crate (Argon2id KDF +
 XChaCha20-Poly1305 AEAD); server gains `/vault/crypto`,
 `/vault/init-crypto`, and `/session-key` endpoints plus encrypted
 `documents.body_ciphertext`; desktop gains unlock/lock commands with a
@@ -10,7 +10,7 @@ XChaCha20-Poly1305 AEAD); server gains `/vault/crypto`,
 
 ---
 
-### `ourtex-crypto` — 2026-04-19 (new, Phase 2b.3)
+### `orchext-crypto` — 2026-04-19 (new, Phase 2b.3)
 
 Passphrase KDF + AEAD primitives. Intentionally minimal — the crate
 exposes only what the client/server need to cooperate on
@@ -39,8 +39,8 @@ session-bound decryption.
 - **XChaCha20-Poly1305 over plain ChaCha20-Poly1305.** 192-bit nonce
   is long enough to pick at random per encryption without a counter
   table. Removes an entire class of operational footguns.
-- **Argon2id `default()` profile.** Same as `ourtex-server`'s
-  password hashing and `ourtex-auth`'s token hashing — one parameter
+- **Argon2id `default()` profile.** Same as `orchext-server`'s
+  password hashing and `orchext-auth`'s token hashing — one parameter
   set across the workspace, easy to bump in one place.
 - **`CryptoError::Open` collapses every decryption failure.** Wrong
   key, tampered ciphertext, truncated nonce, and bad base64 all map
@@ -57,10 +57,10 @@ session-bound decryption.
   `rand::thread_rng()` for `rand::rngs::OsRng` (no thread-local state)
   and added a `cfg(target_arch = "wasm32")` dep on `getrandom` with
   the `js` feature. Argon2 and XChaCha20-Poly1305 are pure-CPU + alloc
-  and need no extra gating. `cargo build -p ourtex-crypto --target
+  and need no extra gating. `cargo build -p orchext-crypto --target
   wasm32-unknown-unknown` succeeds.
 
-### `ourtex-server` — 2026-04-19 (Phase 2b.3 delta)
+### `orchext-server` — 2026-04-19 (Phase 2b.3 delta)
 
 Adds at-rest encryption to the vault endpoints, server-side
 session-key store, and four new control-plane routes. Encryption is
@@ -149,7 +149,7 @@ server-side; reads decrypt if the session key is live, else
 - `plaintext_legacy_rows_still_readable` — unseeded tenants continue
   to operate in plaintext mode; 2b.2 rows are unchanged.
 
-### `ourtex-sync` — 2026-04-19 (Phase 2b.3 delta)
+### `orchext-sync` — 2026-04-19 (Phase 2b.3 delta)
 
 Adds control-plane wrappers for the four new server endpoints. No
 data-path changes — reads/writes go through the existing
@@ -163,16 +163,16 @@ based on whether the session key is live.
   TTL on every call; heartbeat-friendly.
 - `RemoteClient::revoke_session_key()`.
 
-New workspace dep: `ourtex-crypto`.
+New workspace dep: `orchext-crypto`.
 
-### `ourtex-desktop` — 2026-04-19 (Phase 2b.3 delta)
+### `orchext-desktop` — 2026-04-19 (Phase 2b.3 delta)
 
 Unlock / lock flow for remote workspaces.
 
 **New Tauri commands:**
 
 - `workspace_unlock(passphrase)` — derives the master key via
-  `ourtex-crypto::derive_master_key`, fetches the server's crypto
+  `orchext-crypto::derive_master_key`, fetches the server's crypto
   state, and either (a) seeds crypto for a fresh tenant or (b)
   unwraps the stored content key with the master. Publishes the
   content key, spawns a heartbeat task, and runs a full

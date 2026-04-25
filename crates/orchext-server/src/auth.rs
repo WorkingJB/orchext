@@ -1,15 +1,25 @@
 //! Authentication HTTP surface: `/v1/auth/*`.
 //!
-//! Routes:
-//! - `POST   /v1/auth/signup`   — create an account
-//! - `POST   /v1/auth/login`    — exchange credentials for a session
+//! Two parallel surfaces, with distinct response shapes so a browser
+//! never accidentally receives the bearer secret a native client
+//! needs:
+//!
+//! Browser flow (cookie-based, default):
+//! - `POST   /v1/auth/signup`        — sets HttpOnly session cookie
+//! - `POST   /v1/auth/login`         — sets HttpOnly session cookie
+//!
+//! Native flow (bearer-based, opt-in via path):
+//! - `POST   /v1/auth/native/signup` — returns secret in JSON body
+//! - `POST   /v1/auth/native/login`  — returns secret in JSON body
+//!
+//! Shared protected routes:
 //! - `GET    /v1/auth/me`       — current account (authenticated)
 //! - `GET    /v1/auth/sessions` — list active sessions (authenticated)
 //! - `DELETE /v1/auth/logout`   — revoke the current session
 //!
 //! Session middleware on the authenticated routes extracts the bearer
-//! token, validates it against the sessions table, and attaches a
-//! `SessionContext` to the request extensions.
+//! token (or session cookie), validates it against the sessions
+//! table, and attaches a `SessionContext` to the request extensions.
 
 use crate::{
     accounts::{self, Account, SignupInput},
@@ -30,6 +40,8 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use uuid::Uuid;
 
 /// Build the `/v1/auth/*` router. Takes an `AppState` by value so the
@@ -37,9 +49,34 @@ use uuid::Uuid;
 /// `from_fn_with_state` (which binds state at layer-construction time,
 /// not at request time).
 pub fn router(state: AppState) -> Router<AppState> {
-    let public = Router::new()
-        .route("/signup", post(signup_handler))
-        .route("/login", post(login_handler));
+    let mut browser_public = Router::new()
+        .route("/signup", post(signup_browser_handler))
+        .route("/login", post(login_browser_handler));
+
+    let mut native_public = Router::new()
+        .route("/signup", post(signup_native_handler))
+        .route("/login", post(login_native_handler));
+
+    if state.rate_limit_auth {
+        // Per-IP throttle on the unauthenticated signup/login surface.
+        // ~10 attempts/minute sustained with a small burst — enough
+        // for a human fat-fingering a password but slow enough that
+        // credential stuffing or signup-flood campaigns become
+        // unattractive. This is in-process; multi-instance deployments
+        // need a Redis-backed limiter or an upstream proxy rule.
+        let governor_conf = Arc::new(
+            GovernorConfigBuilder::default()
+                .per_second(6)
+                .burst_size(5)
+                .finish()
+                .expect("governor config should be valid"),
+        );
+        let governor_layer = GovernorLayer {
+            config: governor_conf,
+        };
+        browser_public = browser_public.layer(governor_layer.clone());
+        native_public = native_public.layer(governor_layer);
+    }
 
     let protected = Router::new()
         .route("/me", get(me_handler))
@@ -51,7 +88,9 @@ pub fn router(state: AppState) -> Router<AppState> {
             session_auth,
         ));
 
-    public.merge(protected)
+    browser_public
+        .nest("/native", native_public)
+        .merge(protected)
 }
 
 // ---------- handlers ----------
@@ -61,12 +100,6 @@ struct LoginRequest {
     email: String,
     password: String,
     label: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct LoginResponse {
-    account: AccountDto,
-    session: SessionIssuedDto,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,26 +121,36 @@ impl From<Account> for AccountDto {
     }
 }
 
+/// Browser response shape — no `secret` field. The session secret
+/// reaches the client only through the `HttpOnly` cookie set in the
+/// same response, so JS / XSS can't read it.
 #[derive(Debug, Serialize)]
-struct SessionIssuedDto {
+struct BrowserSession {
+    id: Uuid,
+    expires_at: DateTime<Utc>,
+}
+
+/// Native response shape — returns the bearer secret, no cookies.
+/// Used by desktop, agents, anything that holds tokens out-of-browser.
+#[derive(Debug, Serialize)]
+struct NativeSession {
     id: Uuid,
     /// Shown exactly once. Use it as the bearer token for subsequent
-    /// requests. Browser callers can ignore this and rely on the
-    /// `ourtex_session` cookie that the same response sets.
+    /// requests.
     secret: String,
     expires_at: DateTime<Utc>,
-    /// Companion CSRF token. Browser callers must mirror this back as
-    /// the `X-Ourtex-CSRF` header on state-changing requests
-    /// authenticated via cookie. Bearer-authed callers can ignore it.
-    /// Also delivered in the readable `ourtex_csrf` cookie for the
-    /// double-submit pattern.
-    csrf_token: String,
 }
 
 #[derive(Debug, Serialize)]
-struct SignupResponse {
+struct BrowserAuthResponse {
     account: AccountDto,
-    session: SessionIssuedDto,
+    session: BrowserSession,
+}
+
+#[derive(Debug, Serialize)]
+struct NativeAuthResponse {
+    account: AccountDto,
+    session: NativeSession,
 }
 
 #[derive(Debug, Serialize)]
@@ -121,7 +164,9 @@ struct SessionsResponse {
     sessions: Vec<SessionSummary>,
 }
 
-async fn signup_handler(
+// ---------- browser handlers ----------
+
+async fn signup_browser_handler(
     State(state): State<AppState>,
     Json(input): Json<SignupInput>,
 ) -> Result<Response, ApiError> {
@@ -130,13 +175,11 @@ async fn signup_handler(
     let csrf = generate_csrf_token();
     let max_age = (issued.expires_at - Utc::now()).num_seconds().max(0);
 
-    let body = Json(SignupResponse {
+    let body = Json(BrowserAuthResponse {
         account: account.into(),
-        session: SessionIssuedDto {
+        session: BrowserSession {
             id: issued.id,
-            secret: issued.secret.clone(),
             expires_at: issued.expires_at,
-            csrf_token: csrf.clone(),
         },
     });
     let mut resp = (StatusCode::CREATED, body).into_response();
@@ -150,7 +193,7 @@ async fn signup_handler(
     Ok(resp)
 }
 
-async fn login_handler(
+async fn login_browser_handler(
     State(state): State<AppState>,
     Json(input): Json<LoginRequest>,
 ) -> Result<Response, ApiError> {
@@ -160,13 +203,11 @@ async fn login_handler(
     let csrf = generate_csrf_token();
     let max_age = (issued.expires_at - Utc::now()).num_seconds().max(0);
 
-    let body = Json(LoginResponse {
+    let body = Json(BrowserAuthResponse {
         account: account.into(),
-        session: SessionIssuedDto {
+        session: BrowserSession {
             id: issued.id,
-            secret: issued.secret.clone(),
             expires_at: issued.expires_at,
-            csrf_token: csrf.clone(),
         },
     });
     let mut resp = body.into_response();
@@ -178,6 +219,43 @@ async fn login_handler(
         state.secure_cookies,
     );
     Ok(resp)
+}
+
+// ---------- native handlers ----------
+
+async fn signup_native_handler(
+    State(state): State<AppState>,
+    Json(input): Json<SignupInput>,
+) -> Result<Response, ApiError> {
+    let account = accounts::signup(&state.db, input).await?;
+    let issued = state.sessions.issue(account.id, None).await?;
+    let body = Json(NativeAuthResponse {
+        account: account.into(),
+        session: NativeSession {
+            id: issued.id,
+            secret: issued.secret,
+            expires_at: issued.expires_at,
+        },
+    });
+    Ok((StatusCode::CREATED, body).into_response())
+}
+
+async fn login_native_handler(
+    State(state): State<AppState>,
+    Json(input): Json<LoginRequest>,
+) -> Result<Response, ApiError> {
+    let account =
+        accounts::verify_password(&state.db, &input.email, &input.password).await?;
+    let issued = state.sessions.issue(account.id, input.label).await?;
+    let body = Json(NativeAuthResponse {
+        account: account.into(),
+        session: NativeSession {
+            id: issued.id,
+            secret: issued.secret,
+            expires_at: issued.expires_at,
+        },
+    });
+    Ok(body.into_response())
 }
 
 fn attach_session_cookies(
@@ -227,6 +305,10 @@ async fn logout_handler(
     Extension(ctx): Extension<SessionContext>,
 ) -> Result<Response, ApiError> {
     state.sessions.revoke(ctx.session_id).await?;
+    // Drop any in-memory content keys this session published. Without
+    // this, an authenticated logout would leave decryption live until
+    // the per-key TTL expired — see `session_keys::revoke_for_session`.
+    state.session_keys.revoke_for_session(ctx.session_id);
     let mut resp = StatusCode::NO_CONTENT.into_response();
     resp.headers_mut().append(
         header::SET_COOKIE,
@@ -241,7 +323,7 @@ async fn logout_handler(
 
 /// Resolves the caller's session. Tries `Authorization: Bearer` first
 /// (desktop / native clients / agents), then falls back to the
-/// `ourtex_session` cookie (browser SPA). Tags the resulting
+/// `orchext_session` cookie (browser SPA). Tags the resulting
 /// `SessionContext` with `AuthSource` so the CSRF guard can decide
 /// whether the request needs a double-submit token.
 pub async fn session_auth(
@@ -268,7 +350,7 @@ pub async fn session_auth(
 ///   * the method mutates state (POST / PUT / PATCH / DELETE), AND
 ///   * the session was authenticated via cookie.
 /// In that case the request must double-submit the CSRF token —
-/// `X-Ourtex-CSRF` header value must match the `ourtex_csrf` cookie
+/// `X-Orchext-CSRF` header value must match the `orchext_csrf` cookie
 /// value, constant-time-compared.
 pub async fn csrf_guard(req: Request, next: Next) -> Result<Response, ApiError> {
     let method = req.method().clone();
@@ -287,7 +369,7 @@ pub async fn csrf_guard(req: Request, next: Next) -> Result<Response, ApiError> 
 
     let header_token = req
         .headers()
-        .get("x-ourtex-csrf")
+        .get("x-orchext-csrf")
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
     let cookie_token =
@@ -333,9 +415,9 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             header::AUTHORIZATION,
-            "Bearer otx_example".parse().unwrap(),
+            "Bearer ocx_example".parse().unwrap(),
         );
-        assert_eq!(bearer_from_headers(&h).as_deref(), Some("otx_example"));
+        assert_eq!(bearer_from_headers(&h).as_deref(), Some("ocx_example"));
     }
 
     #[test]
@@ -343,9 +425,9 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             header::AUTHORIZATION,
-            "bearer otx_example".parse().unwrap(),
+            "bearer ocx_example".parse().unwrap(),
         );
-        assert_eq!(bearer_from_headers(&h).as_deref(), Some("otx_example"));
+        assert_eq!(bearer_from_headers(&h).as_deref(), Some("ocx_example"));
     }
 
     #[test]

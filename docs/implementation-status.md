@@ -1,4 +1,4 @@
-# Ourtex — Implementation Status
+# Orchext — Implementation Status
 
 Master index. Running status of the v1 build, updated after each
 crate or significant milestone. Other docs describe *intent*
@@ -40,16 +40,16 @@ alongside web onboarding chat and OS keychain — see
 [`phases/phase-3-platform.md`](phases/phase-3-platform.md). Phase 3a
 rebrand still kicks off the post-platform work.
 
-**Rebrand 2026-04-21:** product renamed `mytex` → `ourtex`. All
-crates, bundle identifiers, env vars (`MYTEX_*` → `OURTEX_*`), vault
-directory (`.mytex` → `.ourtex`), and token prefix (`mtx_` → `otx_`)
+**Rebrand 2026-04-21:** product renamed `mytex` → `orchext`. All
+crates, bundle identifiers, env vars (`MYTEX_*` → `ORCHEXT_*`), vault
+directory (`.mytex` → `.orchext`), and token prefix (`mtx_` → `ocx_`)
 renamed in place. No backwards-compat shims — existing installs and
 databases must be rebuilt.
 
 **Rebrand planned 2026-04-22 (executes in Phase 3a):** product will
-rename `ourtex` → `orchext` (orchestration + context) once Phase
-2b.4 wraps. Same playbook: `OURTEX_*` → `ORCHEXT_*`, `.ourtex` →
-`.orchext`, `otx_*` → `ocx_*`, GitHub org/repo rename. Executes as
+rename `orchext` → `orchext` (orchestration + context) once Phase
+2b.4 wraps. Same playbook: `ORCHEXT_*` → `ORCHEXT_*`, `.orchext` →
+`.orchext`, `ocx_*` → `ocx_*`, GitHub org/repo rename. Executes as
 the kickoff of Phase 3a alongside the `type: task` / `type: skill`
 seed types, because Phase 3 also absorbs the scope expansion into
 task aggregation + agent orchestration. Plan detail in
@@ -57,24 +57,24 @@ task aggregation + agent orchestration. Plan detail in
 
 | Crate          | Status        | Unit | Integration | Notes                                  |
 |----------------|---------------|-----:|------------:|----------------------------------------|
-| `ourtex-vault`  | ✅ shipped     | 12   | 6           | Format parser + `PlainFileDriver`      |
-| `ourtex-audit`  | ✅ shipped     | 2    | 5           | Hash-chained JSONL log                 |
-| `ourtex-auth`   | ✅ shipped     | 11   | 9           | Opaque tokens + Argon2id + scopes      |
-| `ourtex-index`  | ✅ shipped     | 4    | 6           | SQLite + FTS5; search / graph / filter |
-| `ourtex-mcp`    | ✅ shipped     | 11   | 22          | JSON-RPC + stdio; rate limit + fs watcher |
-| `ourtex-desktop`| ✅ 2a + 2b.2 + 2b.3 | 7 | —           | Multi-vault + remote connect + unlock/lock |
-| `ourtex-server` | ✅ Phase 2b.3 | 20   | 20          | Auth + vault + index + tokens + audit + crypto |
-| `ourtex-sync`   | ✅ 2b.2 + 2b.3 | 0   | —           | `RemoteVaultDriver` + crypto control calls |
-| `ourtex-crypto` | ✅ 2b.3 + wasm32 | 13 | —           | Argon2id KDF + XChaCha20-Poly1305 AEAD; browser build clean |
-| `ourtex-crypto-wasm` | ✅ 2b.4 | —  | —               | wasm-bindgen surface; 4 ops: generateSalt/ContentKey, wrap/unwrap |
-| `ourtex-web`    | ✅ 2b.4 + 🚧 2b.5 | — | —           | Login + tenant picker + unlock + doc CRUD + tokens + audit; cookie/CSRF auth in flight |
+| `orchext-vault`  | ✅ shipped     | 12   | 6           | Format parser + `PlainFileDriver`      |
+| `orchext-audit`  | ✅ shipped     | 2    | 5           | Hash-chained JSONL log                 |
+| `orchext-auth`   | ✅ shipped     | 11   | 9           | Opaque tokens + Argon2id + scopes      |
+| `orchext-index`  | ✅ shipped     | 4    | 6           | SQLite + FTS5; search / graph / filter |
+| `orchext-mcp`    | ✅ shipped     | 11   | 22          | JSON-RPC + stdio; rate limit + fs watcher |
+| `orchext-desktop`| ✅ 2a + 2b.2 + 2b.3 | 7 | —           | Multi-vault + remote connect + unlock/lock |
+| `orchext-server` | ✅ Phase 2b.3 | 20   | 20          | Auth + vault + index + tokens + audit + crypto |
+| `orchext-sync`   | ✅ 2b.2 + 2b.3 | 0   | —           | `RemoteVaultDriver` + crypto control calls |
+| `orchext-crypto` | ✅ 2b.3 + wasm32 | 13 | —           | Argon2id KDF + XChaCha20-Poly1305 AEAD; browser build clean |
+| `orchext-crypto-wasm` | ✅ 2b.4 | —  | —               | wasm-bindgen surface; 4 ops: generateSalt/ContentKey, wrap/unwrap |
+| `orchext-web`    | ✅ 2b.4 + 🚧 2b.5 | — | —           | Login + tenant picker + unlock + doc CRUD + tokens + audit; cookie/CSRF auth in flight |
 
 **In flight:** Phase 2b.5 — auth hardening + agent surface. Opened
 2026-04-25 with the web auth migration: server emits an httpOnly
-`ourtex_session` cookie alongside a readable `ourtex_csrf` cookie on
+`orchext_session` cookie alongside a readable `orchext_csrf` cookie on
 login/signup, and accepts either bearer (desktop) or cookie (web) on
 authenticated routes. State-changing cookie-authed requests must
-double-submit CSRF via `X-Ourtex-CSRF` header. Web client drops its
+double-submit CSRF via `X-Orchext-CSRF` header. Web client drops its
 `localStorage` token entirely and probes `/v1/auth/me` on load to
 classify session state. Subsequent 2b.5 slices: OAuth 2.1 + PKCE for
 agent tokens, MCP HTTP/SSE transport, `context.propose`. Details in
@@ -100,13 +100,13 @@ Phase 3 platform.
 - [`phases/phase-2b1-server.md`](phases/phase-2b1-server.md) —
   Server skeleton + auth (axum, Postgres, sessions).
 - [`phases/phase-2b2-remote-vault.md`](phases/phase-2b2-remote-vault.md) —
-  Tenant-scoped vault/index/token/audit HTTP endpoints + `ourtex-sync`
+  Tenant-scoped vault/index/token/audit HTTP endpoints + `orchext-sync`
   client + desktop remote workspaces.
 - [`phases/phase-2b3-encryption.md`](phases/phase-2b3-encryption.md) —
-  `ourtex-crypto` + session-bound decryption; encrypted
+  `orchext-crypto` + session-bound decryption; encrypted
   `body_ciphertext`; desktop unlock/lock + heartbeat.
 - [`phases/phase-2b4-web.md`](phases/phase-2b4-web.md) — `apps/web` +
-  `ourtex-crypto-wasm`; login, tenant picker, unlock, doc CRUD,
+  `orchext-crypto-wasm`; login, tenant picker, unlock, doc CRUD,
   tokens, audit. Closed 2026-04-25 without graph or onboarding chat.
 
 ### In flight
@@ -124,7 +124,7 @@ Phase 3 platform.
   Teams + invites (formerly Phase 2c), web onboarding chat, OS
   keychain. Bundles the work pushed out of 2b.4 and 2b.5 narrowing.
 - [`phases/phase-3a-rebrand-tasks.md`](phases/phase-3a-rebrand-tasks.md) —
-  Rebrand `ourtex` → `orchext` + vault-native `type: task` and
+  Rebrand `orchext` → `orchext` + vault-native `type: task` and
   `type: skill` seed types (FORMAT v0.2). Kicks off after Phase 3
   platform wraps.
 - [`phases/phase-3b-integrations.md`](phases/phase-3b-integrations.md) —
@@ -164,27 +164,27 @@ Phase 3 platform.
 ## Repo layout
 
 ```
-ourtex/
+orchext/
 ├─ Cargo.toml                 workspace root, Apache-2.0, MSRV 1.75
 ├─ crates/
-│  ├─ ourtex-vault/            ✅ shipped
-│  ├─ ourtex-audit/            ✅ shipped
-│  ├─ ourtex-auth/             ✅ shipped
-│  ├─ ourtex-index/            ✅ shipped
-│  ├─ ourtex-mcp/              ✅ shipped
-│  ├─ ourtex-server/           ✅ Phase 2b.3
+│  ├─ orchext-vault/            ✅ shipped
+│  ├─ orchext-audit/            ✅ shipped
+│  ├─ orchext-auth/             ✅ shipped
+│  ├─ orchext-index/            ✅ shipped
+│  ├─ orchext-mcp/              ✅ shipped
+│  ├─ orchext-server/           ✅ Phase 2b.3
 │  │  ├─ src/                 lib + bin (axum HTTP API)
 │  │  ├─ migrations/          sqlx migrations (Postgres)
 │  │  ├─ tests/               auth_flow.rs + vault_flow.rs + crypto_flow.rs (need live Postgres)
 │  │  ├─ Dockerfile           multi-stage, debian-slim runtime
 │  │  ├─ docker-compose.yml   postgres + server; dev profile
 │  │  └─ .env.example         reference env vars for compose
-│  ├─ ourtex-sync/             ✅ 2b.2 + 2b.3 — RemoteVaultDriver + crypto control
-│  ├─ ourtex-crypto/           ✅ 2b.3 + wasm32 — Argon2id KDF + XChaCha20-Poly1305 AEAD
-│  └─ ourtex-crypto-wasm/      ✅ 2b.4 — wasm-bindgen surface for the browser
+│  ├─ orchext-sync/             ✅ 2b.2 + 2b.3 — RemoteVaultDriver + crypto control
+│  ├─ orchext-crypto/           ✅ 2b.3 + wasm32 — Argon2id KDF + XChaCha20-Poly1305 AEAD
+│  └─ orchext-crypto-wasm/      ✅ 2b.4 — wasm-bindgen surface for the browser
 ├─ apps/
 │  ├─ desktop/                ✅ Phase 2a
-│  │  ├─ src-tauri/           Rust (ourtex-desktop crate)
+│  │  ├─ src-tauri/           Rust (orchext-desktop crate)
 │  │  └─ src/                 React + Vite + TS + Tailwind
 │  └─ web/                    🚧 Phase 2b.4 — in flight
 │     ├─ src/                 React + Vite + TS + Tailwind (no Tauri)
@@ -218,36 +218,36 @@ ourtex/
 ### Running the full test suite
 
 ```bash
-# Without Postgres: 109 tests pass (ourtex-server integration tests skip).
+# Without Postgres: 109 tests pass (orchext-server integration tests skip).
 cargo test --workspace
 
 # With Postgres: 118 tests pass. Spin up a throwaway container:
-docker run --rm -d --name ourtex-test-pg \
-  -e POSTGRES_USER=ourtex -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=ourtex_test \
+docker run --rm -d --name orchext-test-pg \
+  -e POSTGRES_USER=orchext -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=orchext_test \
   -p 5555:5432 postgres:16-alpine
 
-DATABASE_URL="postgres://ourtex:testpw@localhost:5555/ourtex_test" \
+DATABASE_URL="postgres://orchext:testpw@localhost:5555/orchext_test" \
   cargo test --workspace
 
-docker stop ourtex-test-pg
+docker stop orchext-test-pg
 ```
 
 `sqlx::test` creates a fresh database per test function, so there is
 no state bleed between tests. The throwaway container is for dev
 ergonomics only; CI will want a persistent Postgres service.
 
-### Running ourtex-server locally
+### Running orchext-server locally
 
 ```bash
-# From crates/ourtex-server/:
+# From crates/orchext-server/:
 cp .env.example .env
 docker compose up            # postgres + server on localhost:8080
 curl http://localhost:8080/healthz
 
 # Or for a hot-reload dev loop on the server:
 docker compose up -d postgres
-DATABASE_URL="postgres://ourtex:ourtex-dev-password@localhost/ourtex" \
-  cargo run -p ourtex-server
+DATABASE_URL="postgres://orchext:orchext-dev-password@localhost/orchext" \
+  cargo run -p orchext-server
 ```
 
 ### Running the desktop app
@@ -259,7 +259,7 @@ npm run tauri dev
 ```
 
 First run shows the vault picker; registers the chosen directory as
-a workspace in `~/.ourtex/workspaces.json`. Subsequent launches
+a workspace in `~/.orchext/workspaces.json`. Subsequent launches
 auto-open the active workspace.
 
 ### Running the web app
@@ -272,6 +272,6 @@ npm run dev                  # http://localhost:1430
 ```
 
 `predev` and `prebuild` hooks run `wasm-pack build` against
-`ourtex-crypto-wasm` so the WASM module is always fresh. Set
-`OURTEX_SERVER_URL` to override the proxy target
+`orchext-crypto-wasm` so the WASM module is always fresh. Set
+`ORCHEXT_SERVER_URL` to override the proxy target
 (default `http://localhost:8080`).

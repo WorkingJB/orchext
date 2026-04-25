@@ -1,17 +1,17 @@
 //! Cookie helpers for session + CSRF tokens.
 //!
 //! Two cookies, both `Path=/` and `SameSite=Lax`:
-//!   * `ourtex_session` — opaque session secret, `HttpOnly` so JS
+//!   * `orchext_session` — opaque session secret, `HttpOnly` so JS
 //!     cannot read it. The browser attaches it to every same-origin
 //!     request automatically.
-//!   * `ourtex_csrf` — random token, **not** `HttpOnly` so the web
+//!   * `orchext_csrf` — random token, **not** `HttpOnly` so the web
 //!     client can read `document.cookie`, copy the value, and send it
-//!     back as `X-Ourtex-CSRF` on state-changing requests
+//!     back as `X-Orchext-CSRF` on state-changing requests
 //!     (double-submit pattern).
 //!
 //! `Secure` is gated on `AppState::secure_cookies`. Browsers refuse to
 //! store `Secure` cookies over plain HTTP, so local dev with HTTP needs
-//! `OURTEX_SECURE_COOKIES=0`.
+//! `ORCHEXT_SECURE_COOKIES=0`.
 //!
 //! `SameSite=Lax` (not `Strict`) is the SPA default. `Strict` blocks
 //! cookies on top-level cross-site navigations which would break, e.g.,
@@ -22,8 +22,8 @@
 use axum::http::{HeaderMap, HeaderValue, header};
 use std::collections::HashMap;
 
-pub const SESSION_COOKIE: &str = "ourtex_session";
-pub const CSRF_COOKIE: &str = "ourtex_csrf";
+pub const SESSION_COOKIE: &str = "orchext_session";
+pub const CSRF_COOKIE: &str = "orchext_csrf";
 
 /// Parse all `Cookie:` headers into a name→value map. Last-wins on
 /// duplicates, which matches RFC 6265 sloppily but is fine for our
@@ -53,7 +53,7 @@ pub fn build_session(value: &str, max_age_secs: i64, secure: bool) -> HeaderValu
 }
 
 /// CSRF cookie — readable from JS so the SPA can mirror it back into
-/// the `X-Ourtex-CSRF` header.
+/// the `X-Orchext-CSRF` header.
 pub fn build_csrf(value: &str, max_age_secs: i64, secure: bool) -> HeaderValue {
     let secure_flag = if secure { "; Secure" } else { "" };
     let v = format!(
@@ -78,9 +78,9 @@ mod tests {
     #[test]
     fn parse_single_cookie() {
         let mut h = HeaderMap::new();
-        h.insert(header::COOKIE, "ourtex_session=abc123".parse().unwrap());
+        h.insert(header::COOKIE, "orchext_session=abc123".parse().unwrap());
         let cookies = parse(&h);
-        assert_eq!(cookies.get("ourtex_session").map(String::as_str), Some("abc123"));
+        assert_eq!(cookies.get("orchext_session").map(String::as_str), Some("abc123"));
     }
 
     #[test]
@@ -88,11 +88,11 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(
             header::COOKIE,
-            "ourtex_session=abc; ourtex_csrf=xyz".parse().unwrap(),
+            "orchext_session=abc; orchext_csrf=xyz".parse().unwrap(),
         );
         let cookies = parse(&h);
-        assert_eq!(cookies.get("ourtex_session").map(String::as_str), Some("abc"));
-        assert_eq!(cookies.get("ourtex_csrf").map(String::as_str), Some("xyz"));
+        assert_eq!(cookies.get("orchext_session").map(String::as_str), Some("abc"));
+        assert_eq!(cookies.get("orchext_csrf").map(String::as_str), Some("xyz"));
     }
 
     #[test]

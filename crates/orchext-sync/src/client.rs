@@ -1,4 +1,4 @@
-//! Shared HTTP client + config. All `ourtex-sync` calls go through
+//! Shared HTTP client + config. All `orchext-sync` calls go through
 //! `RemoteClient::request_json`, which attaches the bearer token,
 //! parses the server's structured error envelope, and maps common
 //! tags (`unauthorized`, `not_found`, `conflict:version_conflict`)
@@ -36,7 +36,7 @@ pub struct RemoteClient {
 impl RemoteClient {
     pub fn new(config: RemoteConfig) -> Self {
         let http = reqwest::Client::builder()
-            .user_agent(concat!("ourtex-sync/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("orchext-sync/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("reqwest client should build with default config");
         Self { http, config }

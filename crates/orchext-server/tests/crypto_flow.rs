@@ -5,10 +5,11 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use ourtex_crypto::{
-    derive_master_key, unwrap_content_key, wrap_content_key, ContentKey, Salt, SealedBlob,
+use orchext_crypto::{
+    derive_master_key, make_key_check, unwrap_content_key, wrap_content_key, ContentKey, Salt,
+    SealedBlob,
 };
-use ourtex_server::{router, AppState};
+use orchext_server::{router, AppState};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -26,7 +27,7 @@ async fn bootstrap(app: &axum::Router, email: &str) -> (String, String) {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/auth/signup")
+                .uri("/v1/auth/native/signup")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({ "email": email, "password": "correct horse battery staple" })
@@ -78,6 +79,7 @@ async fn seed_crypto(app: &axum::Router, tid: &str, secret: &str) -> ContentKey 
     let master = derive_master_key("correct horse battery staple", &salt).unwrap();
     let content = ContentKey::generate();
     let wrapped = wrap_content_key(&content, &master).unwrap();
+    let key_check = make_key_check(&content).unwrap();
 
     let resp = app
         .clone()
@@ -91,6 +93,7 @@ async fn seed_crypto(app: &axum::Router, tid: &str, secret: &str) -> ContentKey 
                     json!({
                         "kdf_salt": salt.to_wire(),
                         "wrapped_content_key": wrapped.to_wire(),
+                        "key_check": key_check.to_wire(),
                     })
                     .to_string(),
                 ))
@@ -121,7 +124,7 @@ async fn publish_key(app: &axum::Router, tid: &str, secret: &str, key: &ContentK
 
 #[sqlx::test(migrations = "./migrations")]
 async fn encrypted_round_trip(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap(&app, "crypto@example.com").await;
     let content = seed_crypto(&app, &tid, &secret).await;
     publish_key(&app, &tid, &secret, &content).await;
@@ -158,14 +161,14 @@ async fn encrypted_round_trip(db: PgPool) {
         .unwrap();
     assert_eq!(r.status(), StatusCode::OK);
     let b = read_json(r.into_body()).await;
-    let parsed = ourtex_vault::Document::parse(b["source"].as_str().unwrap()).unwrap();
+    let parsed = orchext_vault::Document::parse(b["source"].as_str().unwrap()).unwrap();
     assert_eq!(parsed.frontmatter.id.as_str(), "rel-jane-smith");
     assert!(parsed.body.contains("My manager at Acme."));
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn vault_locked_without_key(db: PgPool) {
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap(&app, "locked@example.com").await;
     let content = seed_crypto(&app, &tid, &secret).await;
     publish_key(&app, &tid, &secret, &content).await;
@@ -242,13 +245,14 @@ async fn wrong_passphrase_fails_to_unwrap(db: PgPool) {
     // wrapped content key. This test proves the client-side flow —
     // same fetch + unwrap path the desktop runs — fails for the
     // wrong passphrase.
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap(&app, "wrongpass@example.com").await;
 
     let salt = Salt::generate();
     let master = derive_master_key("correct horse battery staple", &salt).unwrap();
     let content = ContentKey::generate();
     let wrapped = wrap_content_key(&content, &master).unwrap();
+    let key_check = make_key_check(&content).unwrap();
     let _ = app
         .clone()
         .oneshot(
@@ -261,6 +265,7 @@ async fn wrong_passphrase_fails_to_unwrap(db: PgPool) {
                     json!({
                         "kdf_salt": salt.to_wire(),
                         "wrapped_content_key": wrapped.to_wire(),
+                        "key_check": key_check.to_wire(),
                     })
                     .to_string(),
                 ))
@@ -301,7 +306,7 @@ async fn wrong_passphrase_fails_to_unwrap(db: PgPool) {
 async fn init_crypto_is_idempotent_forbidden(db: PgPool) {
     // A second `init-crypto` must 409 — the tenant is already seeded
     // and overwriting the wrapped key would orphan existing ciphertext.
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap(&app, "reseed@example.com").await;
     let _ = seed_crypto(&app, &tid, &secret).await;
 
@@ -309,6 +314,7 @@ async fn init_crypto_is_idempotent_forbidden(db: PgPool) {
     let master = derive_master_key("correct horse battery staple", &salt).unwrap();
     let content = ContentKey::generate();
     let wrapped = wrap_content_key(&content, &master).unwrap();
+    let key_check = make_key_check(&content).unwrap();
     let resp = app
         .clone()
         .oneshot(
@@ -321,6 +327,7 @@ async fn init_crypto_is_idempotent_forbidden(db: PgPool) {
                     json!({
                         "kdf_salt": salt.to_wire(),
                         "wrapped_content_key": wrapped.to_wire(),
+                        "key_check": key_check.to_wire(),
                     })
                     .to_string(),
                 ))
@@ -338,7 +345,7 @@ async fn plaintext_legacy_rows_still_readable(db: PgPool) {
     // A tenant without crypto seeded continues to operate in plaintext
     // mode. This pins the 2b.2 compatibility guarantee: adding 2b.3
     // doesn't force migration of existing data.
-    let app = router(AppState::new(db));
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
     let (secret, tid) = bootstrap(&app, "plain@example.com").await;
 
     // Write without seeding crypto → plaintext storage.

@@ -47,5 +47,5 @@ pub fn run() {
             commands::audit_list,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running ourtex-desktop");
+        .expect("error while running orchext-desktop");
 }

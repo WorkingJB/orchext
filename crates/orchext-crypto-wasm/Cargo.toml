@@ -1,6 +1,6 @@
 [package]
-name = "ourtex-crypto-wasm"
-description = "wasm-bindgen surface for ourtex-crypto; consumed by apps/web"
+name = "orchext-crypto-wasm"
+description = "wasm-bindgen surface for orchext-crypto; consumed by apps/web"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,7 +15,7 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-ourtex-crypto = { workspace = true }
+orchext-crypto = { workspace = true }
 wasm-bindgen = "0.2"
 
 [package.metadata.wasm-pack.profile.release]

@@ -18,7 +18,7 @@ the web onboarding chat and OS keychain follow-ups.
 1. **Personal self-host.** Desktop app + local MCP (shipped today).
 2. **Personal synced.** One user, desktop + web client, context synced
    between devices.
-3. **Team self-host.** Business customer runs `ourtex-server` on their
+3. **Team self-host.** Business customer runs `orchext-server` on their
    own infra; team members connect from desktop or web. Shared
    org-level context (marketing stance, goals, tone) alongside
    each member's personal workspace.
@@ -35,9 +35,9 @@ the web onboarding chat and OS keychain follow-ups.
 |              | Self-hosted                | Managed SaaS            |
 | ---          | ---                        | ---                     |
 | **Personal** | Desktop-only (today's v1)  | Desktop + web, synced   |
-| **Team**     | On-prem `ourtex-server`     | Hosted tenant of same   |
+| **Team**     | On-prem `orchext-server`     | Hosted tenant of same   |
 
-**Key claim:** one server artifact (`ourtex-server`, axum) covers the
+**Key claim:** one server artifact (`orchext-server`, axum) covers the
 three non-trivial cells. SaaS is "we operate it for you" — no code
 fork. Already promised by `ARCHITECTURE.md` §6.
 
@@ -51,7 +51,7 @@ same image. A signed standalone binary + systemd unit is possible
 later but not first.
 
 **D8. Identity — one account, N memberships.**
-A Ourtex account is a single login that can belong to any number of
+A Orchext account is a single login that can belong to any number of
 workspaces (one personal + N teams). Client switches workspaces
 in-app. Per-workspace tokens, audit logs, scopes, and visibility
 labels stay isolated; an account is just the identity envelope.
@@ -79,18 +79,18 @@ No per-document ACLs.
 
 **D12. No CRDTs.** Server is source of truth in sync mode. Writes are
 version-checked against document hash (already computed by
-`ourtex-vault`). Conflicts surface as last-write-wins with a UI prompt.
+`orchext-vault`). Conflicts surface as last-write-wins with a UI prompt.
 Multi-device offline editing is a v3 concern.
 
 **D13. Phase 2b is split into five sub-milestones.**
-`ourtex-server` + `ourtex-crypto` + `ourtex-sync` + `apps/web` is too
+`orchext-server` + `orchext-crypto` + `orchext-sync` + `apps/web` is too
 much to land atomically. Order:
 
 - **2b.1** — Server skeleton + user auth. Axum, Postgres, sessions.
   Plaintext blob storage at rest. No vault endpoints.
-- **2b.2** — Server vault + index + token endpoints; `ourtex-sync`
+- **2b.2** — Server vault + index + token endpoints; `orchext-sync`
   client. Desktop gains a remote workspace. Still plaintext.
-- **2b.3** — `ourtex-crypto` + session-bound decryption. Retrofit
+- **2b.3** — `orchext-crypto` + session-bound decryption. Retrofit
   encryption onto 2b.2's endpoints.
 - **2b.4** — `apps/web` web client + WASM crypto. Pulled ahead of
   MCP HTTP/SSE: 2b.4 unblocks a shareable URL; agent-over-HTTP
@@ -104,7 +104,7 @@ much to land atomically. Order:
 Supabase buys us ~2–3 weeks on auth flows but costs us a 6–7
 container self-host stack, a heavyweight external dependency in
 fast flux, and a fork between SaaS and self-host paths. The
-interesting parts of Ourtex (MCP protocol, session-bound decryption,
+interesting parts of Orchext (MCP protocol, session-bound decryption,
 audit chain) are custom and Supabase does not help with any of them.
 Self-host stays at 2 containers (server + Postgres) which is the
 story we want to tell. Stack tight: `sqlx` + `argon2` + `axum` SSE +
@@ -112,9 +112,9 @@ story we want to tell. Stack tight: `sqlx` + `argon2` + `axum` SSE +
 
 **D15. Session model — opaque server-side sessions, not JWT.**
 One-click revoke is a product feature (ARCH §5.2); JWTs would need
-a denylist to support that, which defeats statelessness. `ourtex-auth`
+a denylist to support that, which defeats statelessness. `orchext-auth`
 already uses opaque tokens for MCP agents; user-login sessions use
-the same shape (opaque `otx_*` prefix, Argon2id-hashed at rest,
+the same shape (opaque `ocx_*` prefix, Argon2id-hashed at rest,
 revocable). Per-request DB work is already paid by audit logging.
 Single-service, single-Postgres shape has no distributed-validation
 surface for JWT to win on. Federated SSO later (Google/GitHub) fits
@@ -125,12 +125,12 @@ opaque session.
 OAuth 2.1 + PKCE is ~500 lines of well-specified Rust. Pulling in
 `oxide-auth` or similar adds config complexity we don't need and
 couples the auth surface to a dep's opinions. `argon2` is already
-a workspace dep (used in `ourtex-auth`); reuse it. `sqlx` offline-
+a workspace dep (used in `orchext-auth`); reuse it. `sqlx` offline-
 checked queries match `rusqlite` ergonomics elsewhere in the repo.
 
-**D17. Crate layout — `crates/ourtex-server`, lib + bin.**
-Same shape as `ourtex-mcp`: a library crate exposing a library for
-tests and integration, plus a `ourtex-server` binary for the docker
+**D17. Crate layout — `crates/orchext-server`, lib + bin.**
+Same shape as `orchext-mcp`: a library crate exposing a library for
+tests and integration, plus a `orchext-server` binary for the docker
 image. Keeps `apps/` reserved for end-user clients (desktop, later
 web); servers live under `crates/`.
 
@@ -140,7 +140,7 @@ web); servers live under `crates/`.
 
 Desktop now tracks N registered vaults and switches between them from
 the header. Unblocks use case 5 locally. See
-[`phase-1-core.md`](phase-1-core.md) (rolled into the `ourtex-desktop`
+[`phase-1-core.md`](phase-1-core.md) (rolled into the `orchext-desktop`
 section).
 
 **Cuts that held:** no cross-workspace search; no "all workspaces"
@@ -157,10 +157,10 @@ schema, decisions, and tests.
 **Cuts that held:** no email verification, no password reset, no rate
 limiting beyond axum/tower defaults. All additive in 2b.x.
 
-### Phase 2b.2 — Vault + index endpoints, `ourtex-sync` client **[SHIPPED 2026-04-19]**
+### Phase 2b.2 — Vault + index endpoints, `orchext-sync` client **[SHIPPED 2026-04-19]**
 
 Server speaks the `VaultDriver` + `Index` + token + audit surface over
-HTTP; `ourtex-sync` client crate adapts it back into the trait shape
+HTTP; `orchext-sync` client crate adapts it back into the trait shape
 desktop already uses. Desktop gains remote workspaces. See
 [`phase-2b2-remote-vault.md`](phase-2b2-remote-vault.md).
 
@@ -170,13 +170,13 @@ agent tokens (→ 2b.5); no offline write queue; no cross-tenant search.
 **Follow-up still open:** desktop "Connect to server" modal is a
 ~5-minute UI task; backend is wired.
 
-### Phase 2b.3 — `ourtex-crypto` + session-bound decryption **[SHIPPED 2026-04-19]**
+### Phase 2b.3 — `orchext-crypto` + session-bound decryption **[SHIPPED 2026-04-19]**
 
 Encryption at rest + the session-bound key-publish model from
 ARCH §3.4 / Q3. See [`phase-2b3-encryption.md`](phase-2b3-encryption.md)
 for the route list, decisions, and test coverage. Highlights:
 
-- `ourtex-crypto` new: Argon2id KDF + XChaCha20-Poly1305 AEAD.
+- `orchext-crypto` new: Argon2id KDF + XChaCha20-Poly1305 AEAD.
 - Server `/vault/crypto`, `/vault/init-crypto`, `/session-key`
   endpoints; encrypted `documents.body_ciphertext` column.
 - Desktop `workspace_unlock` / `workspace_lock` commands with a
@@ -200,7 +200,7 @@ shipped. Detailed status + decisions live in
 [`phase-2b4-web.md`](phase-2b4-web.md).
 
 **What landed:** login / signup, tenant picker, browser unlock
-(seed-fresh or unwrap-seeded) backed by `ourtex-crypto-wasm`,
+(seed-fresh or unwrap-seeded) backed by `orchext-crypto-wasm`,
 4-min heartbeat, doc CRUD with base-version optimistic
 concurrency, tokens admin, audit list.
 
@@ -230,8 +230,8 @@ concurrency, tokens admin, audit list.
 
 Four slices, in order:
 
-1. **Web auth hardening** — opening slice. httpOnly `ourtex_session`
-   cookie + readable `ourtex_csrf` cookie issued on login/signup;
+1. **Web auth hardening** — opening slice. httpOnly `orchext_session`
+   cookie + readable `orchext_csrf` cookie issued on login/signup;
    double-submit CSRF on cookie-authed state-changing requests;
    bearer flow preserved for desktop. Drops `localStorage` from
    `apps/web` and replaces session-bootstrapping with an
@@ -241,7 +241,7 @@ Four slices, in order:
    by the logged-in user via the desktop/web UI. Opaque token shape
    (still D15) — OAuth defines the *issuance* flow, not the token
    encoding.
-3. **MCP transport** on `ourtex-server`: JSON-RPC over HTTP + SSE
+3. **MCP transport** on `orchext-server`: JSON-RPC over HTTP + SSE
    per `MCP.md` §2.2. Same tools, same error model.
 4. **`context.propose`** lands on both surfaces. Desktop + web
    proposal review queue for admins (Phase 3 platform-ready).
@@ -256,17 +256,17 @@ Originally scoped to land before Phase 3a. Folded into
 onboarding chat and OS keychain follow-ups, because none of these
 items block 2b.5 and bundling them keeps the rebrand sweep clean.
 Decisions D10 and D11 carry over verbatim. Same scope, same crates
-(`ourtex-server`, `ourtex-vault`, `ourtex-auth`, `apps/desktop`,
+(`orchext-server`, `orchext-vault`, `orchext-auth`, `apps/desktop`,
 `apps/web`); same cuts (no billing, no SCIM/SAML, no per-doc ACLs).
 
 ## New crates / apps summary
 
 | Name                  | Kind  | Phase   | Role                                          |
 | ---                   | ---   | ---     | ---                                           |
-| `ourtex-server`       | crate | 2b.1+   | Axum HTTP + Postgres; Docker-packaged         |
-| `ourtex-sync`         | crate | 2b.2    | Client-side `VaultDriver` over HTTPS          |
-| `ourtex-crypto`       | crate | 2b.3    | Session-bound key hierarchy; WASM-compilable  |
-| `ourtex-crypto-wasm`  | crate | 2b.4    | wasm-bindgen wrapper; browser crypto surface  |
+| `orchext-server`       | crate | 2b.1+   | Axum HTTP + Postgres; Docker-packaged         |
+| `orchext-sync`         | crate | 2b.2    | Client-side `VaultDriver` over HTTPS          |
+| `orchext-crypto`       | crate | 2b.3    | Session-bound key hierarchy; WASM-compilable  |
+| `orchext-crypto-wasm`  | crate | 2b.4    | wasm-bindgen wrapper; browser crypto surface  |
 | `apps/web`            | app   | 2b.4    | React web client (parallel to desktop)        |
 
 Phases 2a and 2c add no new crates — both extend existing ones.
@@ -290,7 +290,7 @@ Resolved (captured in decisions above):
   migrate to `query!` + offline cache when CI has Postgres.
 - ✅ **Web client tech.** Vite + React + Tailwind, mirror desktop.
 - ✅ **MCP transport for team workspaces.** Both — desktop runs local
-  `ourtex-mcp` against `RemoteVaultDriver` (2b.2); hosted integrations
+  `orchext-mcp` against `RemoteVaultDriver` (2b.2); hosted integrations
   hit the server's HTTP/SSE MCP (2b.5).
 - ✅ **Managed backend?** No Supabase (D14). Self-host stays at 2
   containers.
@@ -311,7 +311,7 @@ Still open:
   is simpler but more copy-paste.
 - **Keychain story for session tokens.** Today the desktop stores
   both the Anthropic API key and remote session tokens in plaintext
-  in `~/.ourtex/`. Move to OS keychain (`keyring` crate) before any
+  in `~/.orchext/`. Move to OS keychain (`keyring` crate) before any
   distribution build (Phase 4 — renumbered from Phase 3 on 2026-04-22
   when Phase 3 absorbed the orchext rebrand + capability expansion).
 - **Web session token storage.** `apps/web` currently parks the

@@ -1,9 +1,9 @@
 //! Vault document CRUD.
 //!
-//! The wire format is the canonical ourtex-vault document source — a
+//! The wire format is the canonical orchext-vault document source — a
 //! YAML frontmatter block plus a markdown body — sent as a single
 //! `source` string. That keeps the server's serialization identical to
-//! what `ourtex-vault` already parses/produces on disk, so the content
+//! what `orchext-vault` already parses/produces on disk, so the content
 //! version hash (sha256 over the canonical form) matches bit-for-bit
 //! whether computed by the local client or by the server.
 //!
@@ -17,6 +17,7 @@
 use crate::{
     audit::{self, Actor, AppendRecord, Outcome},
     error::ApiError,
+    sessions::SessionContext,
     tenants::TenantContext,
     AppState,
 };
@@ -27,7 +28,7 @@ use axum::{
     Extension, Json, Router,
 };
 use chrono::{DateTime, NaiveDate, Utc};
-use ourtex_vault::Document;
+use orchext_vault::Document;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use sqlx::{FromRow, Postgres, Transaction};
@@ -176,6 +177,7 @@ async fn list_docs(
 async fn read_doc(
     State(state): State<AppState>,
     Extension(tc): Extension<TenantContext>,
+    Extension(sc): Extension<SessionContext>,
     Path((_tid, doc_id)): Path<(Uuid, String)>,
 ) -> Result<Json<DocResponse>, ApiError> {
     validate_doc_id(&doc_id)?;
@@ -196,7 +198,7 @@ async fn read_doc(
         return Err(ApiError::NotFound);
     };
 
-    let body_plaintext = resolve_body(&state, tc.tenant_id, &row)?;
+    let body_plaintext = resolve_body(&state, tc.tenant_id, sc.session_id, &row)?;
     let source = rebuild_source(&row.frontmatter, &body_plaintext)?;
 
     // Audit reads — denied cases never reach here (tenant guard covers
@@ -231,6 +233,7 @@ async fn read_doc(
 async fn write_doc(
     State(state): State<AppState>,
     Extension(tc): Extension<TenantContext>,
+    Extension(sc): Extension<SessionContext>,
     Path((_tid, doc_id)): Path<(Uuid, String)>,
     Json(req): Json<WriteRequest>,
 ) -> Result<Json<WriteResponse>, ApiError> {
@@ -306,9 +309,9 @@ async fn write_doc(
         if seeded.0 {
             let key = state
                 .session_keys
-                .get(tc.tenant_id)
+                .get(tc.tenant_id, sc.session_id)
                 .ok_or(ApiError::VaultLocked)?;
-            let sealed = ourtex_crypto::seal(body.as_bytes(), &key)
+            let sealed = orchext_crypto::seal(body.as_bytes(), &key)
                 .map_err(|e| ApiError::Internal(Box::new(e)))?;
             (None, Some(sealed.to_wire()), Some(1))
         } else {
@@ -456,19 +459,24 @@ struct DocRow {
 
 /// Pick the plaintext body for a read: either the stored `body` (for
 /// unencrypted rows) or the decrypted `body_ciphertext` using the
-/// tenant's live session key. `vault_locked` when the row is
-/// encrypted but no key is live.
-fn resolve_body(state: &AppState, tenant_id: Uuid, row: &DocRow) -> Result<String, ApiError> {
+/// calling session's live key. `vault_locked` when the row is
+/// encrypted but the calling session has no key published.
+fn resolve_body(
+    state: &AppState,
+    tenant_id: Uuid,
+    session_id: Uuid,
+    row: &DocRow,
+) -> Result<String, ApiError> {
     match (&row.body, &row.body_ciphertext) {
         (Some(plain), None) => Ok(plain.clone()),
         (None, Some(ct_wire)) => {
             let key = state
                 .session_keys
-                .get(tenant_id)
+                .get(tenant_id, session_id)
                 .ok_or(ApiError::VaultLocked)?;
-            let blob = ourtex_crypto::SealedBlob::from_wire(ct_wire)
+            let blob = orchext_crypto::SealedBlob::from_wire(ct_wire)
                 .map_err(|e| ApiError::Internal(Box::new(e)))?;
-            let plain = ourtex_crypto::open(&blob, &key).map_err(|_| {
+            let plain = orchext_crypto::open(&blob, &key).map_err(|_| {
                 // A decryption failure here means either the live key
                 // doesn't match this row's `key_version` or the
                 // ciphertext is corrupt. The caller's only remedy is
@@ -578,9 +586,9 @@ async fn replace_links(
 }
 
 fn validate_doc_id(s: &str) -> Result<(), ApiError> {
-    // Keep in lockstep with `ourtex_vault::DocumentId::is_valid`. We
+    // Keep in lockstep with `orchext_vault::DocumentId::is_valid`. We
     // parse-and-throw to avoid a dependency on that private helper.
-    ourtex_vault::DocumentId::new(s)
+    orchext_vault::DocumentId::new(s)
         .map_err(|_| ApiError::InvalidArgument(format!("invalid doc id {s:?}")))?;
     Ok(())
 }
@@ -603,9 +611,9 @@ fn split_canonical(source: &str) -> Result<(String, String), ApiError> {
 
 fn rebuild_source(frontmatter_json: &JsonValue, body: &str) -> Result<String, ApiError> {
     // Reconstruct the Document from the stored JSONB frontmatter, then
-    // serialize to canonical form. Going through ourtex_vault guarantees
+    // serialize to canonical form. Going through orchext_vault guarantees
     // the output matches the wire format produced on write.
-    let frontmatter: ourtex_vault::Frontmatter =
+    let frontmatter: orchext_vault::Frontmatter =
         serde_json::from_value(frontmatter_json.clone())
             .map_err(|e| ApiError::Internal(Box::new(e)))?;
     let doc = Document {

@@ -1,6 +1,6 @@
-//! Session tokens: opaque `otx_*` secrets, Argon2id-hashed at rest.
+//! Session tokens: opaque `ocx_*` secrets, Argon2id-hashed at rest.
 //!
-//! Matches the `ourtex-auth` token shape (D15). The raw secret is
+//! Matches the `orchext-auth` token shape (D15). The raw secret is
 //! returned to the caller exactly once at issuance; subsequent
 //! validation looks up by `token_prefix` and verifies the full secret
 //! against the stored Argon2id hash.
@@ -22,11 +22,11 @@ use std::{
 };
 use uuid::Uuid;
 
-const TOKEN_PREFIX: &str = "otx_";
+const TOKEN_PREFIX: &str = "ocx_";
 const TOKEN_BYTES: usize = 32;
 const DEFAULT_TTL_DAYS: i64 = 30;
 const CACHE_TTL: StdDuration = StdDuration::from_secs(60);
-const PREFIX_LOOKUP_LEN: usize = TOKEN_PREFIX.len() + 8; // "otx_" + 8 chars
+const PREFIX_LOOKUP_LEN: usize = TOKEN_PREFIX.len() + 8; // "ocx_" + 8 chars
 
 /// Returned once to the caller. The `secret` field is the only moment
 /// the raw token is visible in the clear; persist it carefully.
@@ -126,7 +126,7 @@ impl SessionService {
     }
 
     /// Validate a session secret presented either via `Authorization:
-    /// Bearer` or via the `ourtex_session` cookie. Returns the session
+    /// Bearer` or via the `orchext_session` cookie. Returns the session
     /// context tagged with the source; any mismatch — unknown prefix,
     /// wrong secret, expired, revoked — collapses to `Unauthorized`.
     pub async fn authenticate(
@@ -285,7 +285,7 @@ mod tests {
     fn generate_secret_shape() {
         let s = generate_secret();
         assert!(s.starts_with(TOKEN_PREFIX));
-        // base64url-no-pad of 32 bytes is 43 chars, plus "otx_" = 47.
+        // base64url-no-pad of 32 bytes is 43 chars, plus "ocx_" = 47.
         assert_eq!(s.len(), TOKEN_PREFIX.len() + 43);
         assert!(!s.contains('='));
     }

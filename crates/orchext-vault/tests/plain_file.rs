@@ -1,9 +1,9 @@
-use ourtex_vault::{Document, DocumentId, PlainFileDriver, VaultDriver, Visibility};
+use orchext_vault::{Document, DocumentId, PlainFileDriver, VaultDriver, Visibility};
 use std::collections::BTreeMap;
 use tempfile::TempDir;
 
 fn sample_doc(id: &str, type_: &str, visibility: Visibility) -> Document {
-    let fm = ourtex_vault::Frontmatter {
+    let fm = orchext_vault::Frontmatter {
         id: DocumentId::new(id).unwrap(),
         type_: type_.to_string(),
         visibility,
@@ -75,11 +75,11 @@ async fn list_returns_all_types_and_filters() {
 }
 
 #[tokio::test]
-async fn list_skips_dot_ourtex_directory() {
+async fn list_skips_dot_orchext_directory() {
     let tmp = TempDir::new().unwrap();
-    let ourtex_dir = tmp.path().join(".ourtex");
-    tokio::fs::create_dir_all(&ourtex_dir).await.unwrap();
-    tokio::fs::write(ourtex_dir.join("config.json"), "{}").await.unwrap();
+    let orchext_dir = tmp.path().join(".orchext");
+    tokio::fs::create_dir_all(&orchext_dir).await.unwrap();
+    tokio::fs::write(orchext_dir.join("config.json"), "{}").await.unwrap();
 
     let driver = PlainFileDriver::new(tmp.path());
     driver
@@ -103,7 +103,7 @@ async fn read_missing_returns_not_found() {
         .read(&DocumentId::new("nope").unwrap())
         .await
         .unwrap_err();
-    assert!(matches!(err, ourtex_vault::VaultError::NotFound(_)));
+    assert!(matches!(err, orchext_vault::VaultError::NotFound(_)));
 }
 
 #[tokio::test]
@@ -118,7 +118,7 @@ async fn delete_removes_file() {
     driver.delete(&id).await.unwrap();
 
     let err = driver.read(&id).await.unwrap_err();
-    assert!(matches!(err, ourtex_vault::VaultError::NotFound(_)));
+    assert!(matches!(err, orchext_vault::VaultError::NotFound(_)));
 }
 
 #[tokio::test]
@@ -128,5 +128,5 @@ async fn write_rejects_id_mismatch() {
     let path_id = DocumentId::new("path-id").unwrap();
     let doc = sample_doc("frontmatter-id", "identity", Visibility::Personal);
     let err = driver.write(&path_id, &doc).await.unwrap_err();
-    assert!(matches!(err, ourtex_vault::VaultError::InvalidId(_)));
+    assert!(matches!(err, orchext_vault::VaultError::InvalidId(_)));
 }

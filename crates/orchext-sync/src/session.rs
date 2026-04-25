@@ -62,8 +62,11 @@ struct TenantsResponse {
 }
 
 pub async fn login(server_url: &Url, input: &LoginInput) -> Result<LoginOutcome> {
+    // Native flow: returns the bearer secret in the JSON body. The
+    // browser-targeted `/v1/auth/login` path sets a cookie instead and
+    // omits the secret, which is the wrong shape for a desktop client.
     let client = reqwest::Client::new();
-    let url = server_url.join("v1/auth/login")?;
+    let url = server_url.join("v1/auth/native/login")?;
     let resp = client.post(url).json(input).send().await?;
     let status = resp.status();
     if status.is_success() {

@@ -1,4 +1,4 @@
-use ourtex_server::{config::Config, router, AppState};
+use orchext_server::{config::Config, router, AppState};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -8,20 +8,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "ourtex_server=info,axum=info,sqlx=warn".into()),
+                .unwrap_or_else(|_| "orchext_server=info,axum=info,sqlx=warn".into()),
         )
         .compact()
         .init();
 
     let config = Config::from_env()?;
-    tracing::info!(bind = %config.bind, "starting ourtex-server");
+    tracing::info!(bind = %config.bind, "starting orchext-server");
 
     let db = PgPoolOptions::new()
         .max_connections(config.db_max_connections)
         .connect(&config.database_url)
         .await?;
 
-    ourtex_server::migrate(&db).await?;
+    orchext_server::migrate(&db).await?;
     tracing::info!("migrations applied");
 
     let state = AppState::new(db).with_secure_cookies(config.secure_cookies);

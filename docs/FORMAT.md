@@ -1,7 +1,7 @@
-# Ourtex Vault Format (v0.1)
+# Orchext Vault Format (v0.1)
 
-The vault format is the long-term contract between a user and Ourtex.
-Any version of Ourtex — desktop, cloud, self-hosted — must be able to
+The vault format is the long-term contract between a user and Orchext.
+Any version of Orchext — desktop, cloud, self-hosted — must be able to
 read a vault written to this spec. Changes to this document are
 versioned.
 
@@ -13,11 +13,11 @@ is not part of the format.
 ## 1. Vault layout
 
 A vault is a directory. Its root contains one reserved directory
-(`.ourtex/`) and one directory per document `type`.
+(`.orchext/`) and one directory per document `type`.
 
 ```
 <vault-root>/
-├─ .ourtex/             reserved; see §7
+├─ .orchext/             reserved; see §7
 ├─ identity/
 ├─ roles/
 ├─ goals/
@@ -66,7 +66,7 @@ Reviews deliverables on Fridays.
 ```
 
 Frontmatter is mandatory. A file without frontmatter is not a valid
-Ourtex document (but may still be stored in the vault and ignored by
+Orchext document (but may still be stored in the vault and ignored by
 the indexer).
 
 ---
@@ -179,7 +179,7 @@ Implementations must enforce these rules for any document whose
 
 ## 6. Links
 
-Ourtex uses Obsidian-style wikilinks for inter-document references.
+Orchext uses Obsidian-style wikilinks for inter-document references.
 
 Syntax:
 
@@ -205,14 +205,14 @@ Backlinks are derived by the indexer and never stored in frontmatter.
 
 ---
 
-## 7. The `.ourtex/` directory
+## 7. The `.orchext/` directory
 
-Reserved for Ourtex's internal state. Users should not edit files here
+Reserved for Orchext's internal state. Users should not edit files here
 by hand. Syncing tools should include it (so permissions and audit
 travel with the vault), unless the user explicitly opts out.
 
 ```
-.ourtex/
+.orchext/
 ├─ config.json         user preferences, driver selection, UI state
 ├─ tokens.json         hashed agent tokens + scopes + metadata
 ├─ audit.log           append-only, hash-chained
@@ -231,7 +231,7 @@ there.
 ## 8. Versioning
 
 The vault format is versioned with a single integer.minor pair (this
-document describes `0.1`). The version is written to `.ourtex/version`
+document describes `0.1`). The version is written to `.orchext/version`
 on vault creation.
 
 - **Patch-level** changes (new optional fields, new seed `schema`
@@ -283,7 +283,7 @@ created: 2026-04-01
 updated: 2026-04-18
 ---
 
-# Q2 launch of Ourtex public beta
+# Q2 launch of Orchext public beta
 
 **Target:** 2026-06-30
 **Status:** on track
@@ -340,7 +340,7 @@ written today round-trip cleanly when Phase 2 ships.
 ### 11.1 Workspace registry (Phase 2a)
 
 The desktop app tracks a user's registered workspaces in a single
-per-user file at `~/.ourtex/workspaces.json` — **outside** any vault.
+per-user file at `~/.orchext/workspaces.json` — **outside** any vault.
 This file is not part of the vault format; it is per-install client
 state. A vault root never references the registry. A vault remains
 portable: drop it onto another machine, register it as a new

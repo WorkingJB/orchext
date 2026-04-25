@@ -1,4 +1,4 @@
-//! Workspace registry stored at `~/.ourtex/workspaces.json`.
+//! Workspace registry stored at `~/.orchext/workspaces.json`.
 //!
 //! The registry is per-install client state, not part of the vault
 //! format (see FORMAT.md §11.1). It tracks every vault the user has
@@ -6,7 +6,7 @@
 //! active.
 //!
 //! Phase 2a ships only `kind = "local"` entries. Phase 2b adds
-//! `kind = "remote"` for vaults backed by `ourtex-server`.
+//! `kind = "remote"` for vaults backed by `orchext-server`.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Utc};
@@ -43,7 +43,7 @@ pub struct WorkspaceEntry {
     /// `"local"` | `"remote"`.
     pub kind: String,
     /// Filesystem root for local workspaces. For remote entries this is
-    /// the *cache* root under `~/.ourtex/remote/<workspace_id>/` — the
+    /// the *cache* root under `~/.orchext/remote/<workspace_id>/` — the
     /// frontend displays the server URL instead.
     pub path: PathBuf,
     pub added_at: DateTime<Utc>,
@@ -56,7 +56,7 @@ pub struct WorkspaceEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_email: Option<String>,
     /// Session bearer token. Stored in plaintext inside the registry
-    /// file for now (same threat model as `.ourtex/settings.json`).
+    /// file for now (same threat model as `.orchext/settings.json`).
     /// Known gap: should move to the OS keychain in 2b.3 with the
     /// crypto + unlock flow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -209,15 +209,15 @@ fn generate_workspace_id() -> String {
     format!("ws_{}", URL_SAFE_NO_PAD.encode(bytes))
 }
 
-/// Default registry location: `~/.ourtex/workspaces.json`. If `$HOME` is
+/// Default registry location: `~/.orchext/workspaces.json`. If `$HOME` is
 /// unset (which should never happen on macOS/Linux/Windows Tauri), falls
-/// back to `./.ourtex/workspaces.json` in the current working directory
+/// back to `./.orchext/workspaces.json` in the current working directory
 /// so the app is still usable — the user just loses cross-run state.
 pub fn default_registry_path() -> PathBuf {
     let base = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
-    base.join(".ourtex").join("workspaces.json")
+    base.join(".orchext").join("workspaces.json")
 }
 
 #[cfg(test)]
@@ -241,7 +241,7 @@ mod tests {
         let path = dir.path().join("workspaces.json");
         let mut r = Registry::default();
         let id = r
-            .add_local("Personal".into(), PathBuf::from("/tmp/ourtex-personal"))
+            .add_local("Personal".into(), PathBuf::from("/tmp/orchext-personal"))
             .id
             .clone();
         r.set_active(&id).unwrap();

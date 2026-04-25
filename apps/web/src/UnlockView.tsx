@@ -58,7 +58,13 @@ export function UnlockView({
           passphrase,
           saltWire
         );
-        await api.initCrypto(tenant.tenant_id, saltWire, wrappedWire);
+        const keyCheckWire = await crypto.makeKeyCheck(contentKeyWire);
+        await api.initCrypto(
+          tenant.tenant_id,
+          saltWire,
+          wrappedWire,
+          keyCheckWire
+        );
       }
       await api.publishSessionKey(tenant.tenant_id, contentKeyWire);
       onUnlocked(contentKeyWire);

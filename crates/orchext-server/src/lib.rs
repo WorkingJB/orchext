@@ -1,4 +1,4 @@
-//! Ourtex server — HTTP API.
+//! Orchext server — HTTP API.
 //!
 //! Phase 2b.1 shipped user auth (`/v1/auth/*`). Phase 2b.2 adds the
 //! tenant-scoped vault + index + tokens + audit surface under
@@ -37,13 +37,16 @@ pub struct AppState {
     /// must keep this `true` so the browser refuses to send cookies
     /// over a downgrade.
     pub secure_cookies: bool,
+    /// Per-IP throttle on `/v1/auth/{signup,login}` (and the `/native/*`
+    /// twins). Defaults to true. Integration tests turn it off because
+    /// `tower::ServiceExt::oneshot` doesn't attach a peer `SocketAddr`,
+    /// which the IP key extractor needs.
+    pub rate_limit_auth: bool,
 }
 
 impl AppState {
-    /// Production-style constructor with `Secure` cookies enabled.
-    /// Tests and `main` call this; integration tests can override the
-    /// flag with `with_secure_cookies(false)` before mounting the
-    /// router if they need to exercise the cookie path over plain HTTP.
+    /// Production-style constructor: secure cookies on, rate limiting
+    /// on. Tests use `with_*` builders to opt out where needed.
     pub fn new(db: PgPool) -> Self {
         let sessions = Arc::new(sessions::SessionService::new(db.clone()));
         let session_keys = Arc::new(session_keys::SessionKeyStore::new());
@@ -52,11 +55,17 @@ impl AppState {
             sessions,
             session_keys,
             secure_cookies: true,
+            rate_limit_auth: true,
         }
     }
 
     pub fn with_secure_cookies(mut self, secure: bool) -> Self {
         self.secure_cookies = secure;
+        self
+    }
+
+    pub fn with_rate_limit_auth(mut self, on: bool) -> Self {
+        self.rate_limit_auth = on;
         self
     }
 }

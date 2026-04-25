@@ -1,10 +1,10 @@
 {
-  "name": "ourtex-web",
+  "name": "orchext-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build:wasm": "wasm-pack build ../../crates/ourtex-crypto-wasm --target web --out-dir ../../apps/web/src/wasm --out-name ourtex_crypto_wasm",
+    "build:wasm": "wasm-pack build ../../crates/orchext-crypto-wasm --target web --out-dir ../../apps/web/src/wasm --out-name orchext_crypto_wasm",
     "predev": "npm run build:wasm",
     "prebuild": "npm run build:wasm",
     "dev": "vite",
