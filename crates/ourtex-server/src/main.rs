@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ourtex_server::migrate(&db).await?;
     tracing::info!("migrations applied");
 
-    let state = AppState::new(db);
+    let state = AppState::new(db).with_secure_cookies(config.secure_cookies);
     let app = router(state);
 
     let addr: SocketAddr = config.bind.parse()?;

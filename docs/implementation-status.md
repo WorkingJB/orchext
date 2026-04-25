@@ -15,15 +15,30 @@ that limit, consolidate scope or break out a sub-phase.
 
 ## Snapshot
 
-**Last updated:** 2026-04-22
+**Last updated:** 2026-04-25
 
 **Toolchain:** Rust 1.95.0 stable (rustup) + Node 20+ for the web /
 desktop frontends. wasm-pack 0.14 drives the browser crypto build.
 Workspace at repo root.
 
-**Test totals:** 148/148 passing with `DATABASE_URL` set; 128/128
+**Test totals:** 153/153 passing with `DATABASE_URL` set; 133/133
 without the DB-required suite (Rust only — `apps/web` has no JS test
-suite yet).
+suite yet). +5 unit tests this round, all in the new `cookies`
+module.
+
+**Scope shuffle 2026-04-25:** four scope changes folded in one pass.
+(1) **Graph view dropped.** Desktop's `GraphView.tsx` +
+`react-force-graph-2d` removed; web never adopted it. The view didn't
+earn its UI weight against the documents list. (2) **2b.4 closed**
+without onboarding parity — desktop's Anthropic-keyed onboarding chat
+needs a server-mediated route the browser can call, deferred to
+Phase 3 platform. (3) **2b.5 narrowed and started.** Begins with web
+auth hardening (httpOnly session cookie + double-submit CSRF),
+followed by OAuth 2.1 + PKCE for agent tokens, then MCP HTTP/SSE,
+then `context.propose`. (4) **Phase 2c absorbed into Phase 3 platform**
+alongside web onboarding chat and OS keychain — see
+[`phases/phase-3-platform.md`](phases/phase-3-platform.md). Phase 3a
+rebrand still kicks off the post-platform work.
 
 **Rebrand 2026-04-21:** product renamed `mytex` → `ourtex`. All
 crates, bundle identifiers, env vars (`MYTEX_*` → `OURTEX_*`), vault
@@ -52,25 +67,26 @@ task aggregation + agent orchestration. Plan detail in
 | `ourtex-sync`   | ✅ 2b.2 + 2b.3 | 0   | —           | `RemoteVaultDriver` + crypto control calls |
 | `ourtex-crypto` | ✅ 2b.3 + wasm32 | 13 | —           | Argon2id KDF + XChaCha20-Poly1305 AEAD; browser build clean |
 | `ourtex-crypto-wasm` | ✅ 2b.4 | —  | —               | wasm-bindgen surface; 4 ops: generateSalt/ContentKey, wrap/unwrap |
-| `ourtex-web`    | 🚧 2b.4 admin    | —  | —           | Vite + React + Tailwind; login + tenant picker + unlock + doc CRUD + tokens + audit |
+| `ourtex-web`    | ✅ 2b.4 + 🚧 2b.5 | — | —           | Login + tenant picker + unlock + doc CRUD + tokens + audit; cookie/CSRF auth in flight |
 
-**In flight:** Phase 2b.4 — `apps/web` web client + WASM crypto.
-Opened 2026-04-22. `ourtex-crypto` builds clean for
-`wasm32-unknown-unknown`; new `ourtex-crypto-wasm` wrapper crate
-exposes four wasm-bindgen functions (generateSalt, generateContentKey,
-wrapContentKey, unwrapContentKey) consumed by `apps/web` via wasm-pack.
-Browser unlock flow wired: `UnlockView` handles both seed-fresh and
-unwrap-seeded paths, publishes the content key, and a 4-minute
-heartbeat keeps the server-side TTL alive. Doc create / edit / delete
-landed 2026-04-22 with a `buildSource` + `parseSource` YAML helper
-(`js-yaml`) and base-version-checked writes. Tokens + audit views
-landed the same day with a Documents / Tokens / Audit left-nav; the
-audit view surfaces the server's head hash (no client-side chain
-rehash — brittle against serde JSON ordering). Still to wire:
-onboarding parity with desktop and hardening the session token off
-`localStorage`. Details in
-[`phases/phase-2b4-web.md`](phases/phase-2b4-web.md); forward plan
-in [`phases/phase-2-plan.md`](phases/phase-2-plan.md).
+**In flight:** Phase 2b.5 — auth hardening + agent surface. Opened
+2026-04-25 with the web auth migration: server emits an httpOnly
+`ourtex_session` cookie alongside a readable `ourtex_csrf` cookie on
+login/signup, and accepts either bearer (desktop) or cookie (web) on
+authenticated routes. State-changing cookie-authed requests must
+double-submit CSRF via `X-Ourtex-CSRF` header. Web client drops its
+`localStorage` token entirely and probes `/v1/auth/me` on load to
+classify session state. Subsequent 2b.5 slices: OAuth 2.1 + PKCE for
+agent tokens, MCP HTTP/SSE transport, `context.propose`. Details in
+[`phases/phase-2b5-auth-mcp.md`](phases/phase-2b5-auth-mcp.md) (TBD);
+forward plan in [`phases/phase-2-plan.md`](phases/phase-2-plan.md).
+
+**Just shipped:** Phase 2b.4 closed 2026-04-25. Web client gained
+login + signup, tenant picker, browser unlock with WASM-side
+KDF/AEAD, 4-minute content-key heartbeat, doc CRUD with
+base-version optimistic concurrency, tokens admin, and audit list.
+Graph view dropped from both clients; onboarding chat moved to
+Phase 3 platform.
 
 ---
 
@@ -89,29 +105,36 @@ in [`phases/phase-2-plan.md`](phases/phase-2-plan.md).
 - [`phases/phase-2b3-encryption.md`](phases/phase-2b3-encryption.md) —
   `ourtex-crypto` + session-bound decryption; encrypted
   `body_ciphertext`; desktop unlock/lock + heartbeat.
+- [`phases/phase-2b4-web.md`](phases/phase-2b4-web.md) — `apps/web` +
+  `ourtex-crypto-wasm`; login, tenant picker, unlock, doc CRUD,
+  tokens, audit. Closed 2026-04-25 without graph or onboarding chat.
 
 ### In flight
 
-- [`phases/phase-2b4-web.md`](phases/phase-2b4-web.md) — `apps/web` +
-  `ourtex-crypto-wasm`; login, tenant picker, unlock, read-only docs
-  shipped 2026-04-22. Writes / tokens / audit still to wire.
+- [`phases/phase-2-plan.md`](phases/phase-2-plan.md) (Phase 2b.5) —
+  Auth hardening (cookie + CSRF) opened 2026-04-25, then OAuth 2.1
+  PKCE, MCP HTTP/SSE, `context.propose`.
 
 ### Planned
 
 - [`phases/phase-2-plan.md`](phases/phase-2-plan.md) — Phase 2 goals,
-  decisions D7–D17, remaining sub-milestones (2b.4 web client in
-  flight, 2b.5 MCP HTTP/OAuth/`context.propose`, 2c teams), scope
-  cuts, open questions.
+  decisions D7–D17, remaining 2b.5 slices, scope cuts, open
+  questions.
+- [`phases/phase-3-platform.md`](phases/phase-3-platform.md) —
+  Teams + invites (formerly Phase 2c), web onboarding chat, OS
+  keychain. Bundles the work pushed out of 2b.4 and 2b.5 narrowing.
 - [`phases/phase-3a-rebrand-tasks.md`](phases/phase-3a-rebrand-tasks.md) —
   Rebrand `ourtex` → `orchext` + vault-native `type: task` and
-  `type: skill` seed types (FORMAT v0.2). Kicks off Phase 3.
+  `type: skill` seed types (FORMAT v0.2). Kicks off after Phase 3
+  platform wraps.
 - [`phases/phase-3b-integrations.md`](phases/phase-3b-integrations.md) —
   First external task integration (Todoist) + visibility-driven
   storage tier (`task_projection`) + server-held integration
   credentials. Introduces decisions D18, D22–D26.
 - [`phases/phase-3c-task-expansion.md`](phases/phase-3c-task-expansion.md) —
   Linear / Jira / Asana / MS To Do adapters + team-inbox aggregation
-  (depends on Phase 2c teams). Decisions D27–D30.
+  (depends on the team workspaces shipped in Phase 3 platform).
+  Decisions D27–D30.
 - [`phases/phase-3d-agent-observer.md`](phases/phase-3d-agent-observer.md) —
   Agent sessions observer-only: `orchext-agents` crate, heartbeat
   protocol, client-encrypted transcripts, activity panes. Decisions

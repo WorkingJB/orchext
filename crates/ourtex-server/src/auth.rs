@@ -13,19 +13,22 @@
 
 use crate::{
     accounts::{self, Account, SignupInput},
+    cookies,
     error::ApiError,
-    sessions::{SessionContext, SessionSummary},
+    sessions::{AuthSource, SessionContext, SessionSummary},
     AppState,
 };
 use axum::{
     extract::{Request, State},
     http::{header, HeaderMap, StatusCode},
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
     Extension, Json, Router,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Utc};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -42,6 +45,7 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/me", get(me_handler))
         .route("/sessions", get(sessions_handler))
         .route("/logout", delete(logout_handler))
+        .route_layer(middleware::from_fn(csrf_guard))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             session_auth,
@@ -88,9 +92,16 @@ impl From<Account> for AccountDto {
 struct SessionIssuedDto {
     id: Uuid,
     /// Shown exactly once. Use it as the bearer token for subsequent
-    /// requests.
+    /// requests. Browser callers can ignore this and rely on the
+    /// `ourtex_session` cookie that the same response sets.
     secret: String,
     expires_at: DateTime<Utc>,
+    /// Companion CSRF token. Browser callers must mirror this back as
+    /// the `X-Ourtex-CSRF` header on state-changing requests
+    /// authenticated via cookie. Bearer-authed callers can ignore it.
+    /// Also delivered in the readable `ourtex_csrf` cookie for the
+    /// double-submit pattern.
+    csrf_token: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -113,37 +124,83 @@ struct SessionsResponse {
 async fn signup_handler(
     State(state): State<AppState>,
     Json(input): Json<SignupInput>,
-) -> Result<(StatusCode, Json<SignupResponse>), ApiError> {
+) -> Result<Response, ApiError> {
     let account = accounts::signup(&state.db, input).await?;
     let issued = state.sessions.issue(account.id, None).await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(SignupResponse {
-            account: account.into(),
-            session: SessionIssuedDto {
-                id: issued.id,
-                secret: issued.secret,
-                expires_at: issued.expires_at,
-            },
-        }),
-    ))
+    let csrf = generate_csrf_token();
+    let max_age = (issued.expires_at - Utc::now()).num_seconds().max(0);
+
+    let body = Json(SignupResponse {
+        account: account.into(),
+        session: SessionIssuedDto {
+            id: issued.id,
+            secret: issued.secret.clone(),
+            expires_at: issued.expires_at,
+            csrf_token: csrf.clone(),
+        },
+    });
+    let mut resp = (StatusCode::CREATED, body).into_response();
+    attach_session_cookies(
+        resp.headers_mut(),
+        &issued.secret,
+        &csrf,
+        max_age,
+        state.secure_cookies,
+    );
+    Ok(resp)
 }
 
 async fn login_handler(
     State(state): State<AppState>,
     Json(input): Json<LoginRequest>,
-) -> Result<Json<LoginResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     let account =
         accounts::verify_password(&state.db, &input.email, &input.password).await?;
     let issued = state.sessions.issue(account.id, input.label).await?;
-    Ok(Json(LoginResponse {
+    let csrf = generate_csrf_token();
+    let max_age = (issued.expires_at - Utc::now()).num_seconds().max(0);
+
+    let body = Json(LoginResponse {
         account: account.into(),
         session: SessionIssuedDto {
             id: issued.id,
-            secret: issued.secret,
+            secret: issued.secret.clone(),
             expires_at: issued.expires_at,
+            csrf_token: csrf.clone(),
         },
-    }))
+    });
+    let mut resp = body.into_response();
+    attach_session_cookies(
+        resp.headers_mut(),
+        &issued.secret,
+        &csrf,
+        max_age,
+        state.secure_cookies,
+    );
+    Ok(resp)
+}
+
+fn attach_session_cookies(
+    headers: &mut HeaderMap,
+    session_secret: &str,
+    csrf_token: &str,
+    max_age_secs: i64,
+    secure: bool,
+) {
+    headers.append(
+        header::SET_COOKIE,
+        cookies::build_session(session_secret, max_age_secs, secure),
+    );
+    headers.append(
+        header::SET_COOKIE,
+        cookies::build_csrf(csrf_token, max_age_secs, secure),
+    );
+}
+
+fn generate_csrf_token() -> String {
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
 }
 
 async fn me_handler(
@@ -168,25 +225,89 @@ async fn sessions_handler(
 async fn logout_handler(
     State(state): State<AppState>,
     Extension(ctx): Extension<SessionContext>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Response, ApiError> {
     state.sessions.revoke(ctx.session_id).await?;
-    Ok(StatusCode::NO_CONTENT)
+    let mut resp = StatusCode::NO_CONTENT.into_response();
+    resp.headers_mut().append(
+        header::SET_COOKIE,
+        cookies::clear_session(state.secure_cookies),
+    );
+    resp.headers_mut()
+        .append(header::SET_COOKIE, cookies::clear_csrf(state.secure_cookies));
+    Ok(resp)
 }
 
 // ---------- session middleware ----------
 
-/// Validates `Authorization: Bearer <token>`, attaches `SessionContext`
-/// to the request extensions, and hands off to the next handler.
-/// Any failure short-circuits with `401 Unauthorized`.
+/// Resolves the caller's session. Tries `Authorization: Bearer` first
+/// (desktop / native clients / agents), then falls back to the
+/// `ourtex_session` cookie (browser SPA). Tags the resulting
+/// `SessionContext` with `AuthSource` so the CSRF guard can decide
+/// whether the request needs a double-submit token.
 pub async fn session_auth(
     State(state): State<AppState>,
     mut req: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    let token = bearer_from_headers(req.headers()).ok_or(ApiError::Unauthorized)?;
-    let ctx = state.sessions.authenticate(&token).await?;
+    let ctx = if let Some(bearer) = bearer_from_headers(req.headers()) {
+        state.sessions.authenticate(&bearer, AuthSource::Bearer).await?
+    } else if let Some(cookie) = session_cookie(req.headers()) {
+        state
+            .sessions
+            .authenticate(&cookie, AuthSource::Cookie)
+            .await?
+    } else {
+        return Err(ApiError::Unauthorized);
+    };
     req.extensions_mut().insert(ctx);
     Ok(next.run(req).await)
+}
+
+/// CSRF middleware. Runs after `session_auth` so it can read the
+/// `SessionContext`. Pass-through unless:
+///   * the method mutates state (POST / PUT / PATCH / DELETE), AND
+///   * the session was authenticated via cookie.
+/// In that case the request must double-submit the CSRF token —
+/// `X-Ourtex-CSRF` header value must match the `ourtex_csrf` cookie
+/// value, constant-time-compared.
+pub async fn csrf_guard(req: Request, next: Next) -> Result<Response, ApiError> {
+    let method = req.method().clone();
+    let mutates = matches!(
+        method.as_str(),
+        "POST" | "PUT" | "PATCH" | "DELETE"
+    );
+    let auth_source = req
+        .extensions()
+        .get::<SessionContext>()
+        .map(|c| c.auth_source);
+
+    if !mutates || auth_source != Some(AuthSource::Cookie) {
+        return Ok(next.run(req).await);
+    }
+
+    let header_token = req
+        .headers()
+        .get("x-ourtex-csrf")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let cookie_token =
+        cookies::parse(req.headers()).get(cookies::CSRF_COOKIE).cloned();
+
+    match (header_token, cookie_token) {
+        (Some(h), Some(c)) if !h.is_empty() && constant_time_eq(h.as_bytes(), c.as_bytes()) => {
+            Ok(next.run(req).await)
+        }
+        _ => Err(ApiError::CsrfFailed),
+    }
+}
+
+fn session_cookie(headers: &HeaderMap) -> Option<String> {
+    cookies::parse(headers).remove(cookies::SESSION_COOKIE)
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    use subtle::ConstantTimeEq;
+    a.ct_eq(b).into()
 }
 
 fn bearer_from_headers(headers: &HeaderMap) -> Option<String> {

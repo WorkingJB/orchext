@@ -38,12 +38,24 @@ pub struct IssuedSession {
     pub expires_at: DateTime<Utc>,
 }
 
+/// How the caller proved their session on this request. Distinguishes
+/// `Bearer` (Authorization header — desktop / native clients / agents)
+/// from `Cookie` (browser session cookie — `apps/web`). The CSRF guard
+/// only enforces double-submit for `Cookie`-authed state-changing
+/// requests; `Bearer` is the authority on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthSource {
+    Bearer,
+    Cookie,
+}
+
 /// Authenticated principal attached to the request after session
 /// middleware runs.
 #[derive(Debug, Clone)]
 pub struct SessionContext {
     pub session_id: Uuid,
     pub account_id: Uuid,
+    pub auth_source: AuthSource,
 }
 
 #[derive(Debug, FromRow)]
@@ -113,10 +125,15 @@ impl SessionService {
         })
     }
 
-    /// Validate a bearer token. Returns the session context on success;
-    /// any mismatch — unknown prefix, wrong secret, expired, revoked —
-    /// collapses to `Unauthorized`.
-    pub async fn authenticate(&self, bearer: &str) -> Result<SessionContext, ApiError> {
+    /// Validate a session secret presented either via `Authorization:
+    /// Bearer` or via the `ourtex_session` cookie. Returns the session
+    /// context tagged with the source; any mismatch — unknown prefix,
+    /// wrong secret, expired, revoked — collapses to `Unauthorized`.
+    pub async fn authenticate(
+        &self,
+        bearer: &str,
+        source: AuthSource,
+    ) -> Result<SessionContext, ApiError> {
         if !bearer.starts_with(TOKEN_PREFIX) {
             return Err(ApiError::Unauthorized);
         }
@@ -125,6 +142,7 @@ impl SessionService {
             return Ok(SessionContext {
                 session_id: cached.session_id,
                 account_id: cached.account_id,
+                auth_source: source,
             });
         }
 
@@ -175,6 +193,7 @@ impl SessionService {
         Ok(SessionContext {
             session_id: row.id,
             account_id: row.account_id,
+            auth_source: source,
         })
     }
 

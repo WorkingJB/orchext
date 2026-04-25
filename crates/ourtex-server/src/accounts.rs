@@ -36,9 +36,9 @@ pub struct SignupInput {
     pub display_name: Option<String>,
 }
 
-/// Minimum password length. Matches common B2B SaaS defaults; bump or
-/// make configurable once we have a password policy story.
-const MIN_PASSWORD_LEN: usize = 12;
+/// Minimum password length. Make configurable once we have a real
+/// password policy story.
+const MIN_PASSWORD_LEN: usize = 8;
 
 pub async fn signup(db: &PgPool, input: SignupInput) -> Result<Account, ApiError> {
     let email = normalize_email(&input.email)?;

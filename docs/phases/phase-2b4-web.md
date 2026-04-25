@@ -1,11 +1,11 @@
-# Phase 2b.4 — Web client + WASM crypto (in flight)
+# Phase 2b.4 — Web client + WASM crypto **[SHIPPED 2026-04-25]**
 
-Opened 2026-04-22. Adds `apps/web` (Vite + React + Tailwind) alongside
-`apps/desktop`, plus a browser-facing `ourtex-crypto-wasm` wrapper so
-the unlock flow runs entirely client-side. Pulled ahead of 2b.5
-(MCP HTTP/SSE + OAuth PKCE + `context.propose`) so a shareable URL
-lands sooner; depends only on 2b.2's HTTP surface and 2b.3's crypto,
-both shipped.
+Opened 2026-04-22, closed 2026-04-25. Adds `apps/web` (Vite + React +
+Tailwind) alongside `apps/desktop`, plus a browser-facing
+`ourtex-crypto-wasm` wrapper so the unlock flow runs entirely
+client-side. Pulled ahead of 2b.5 (MCP HTTP/SSE + OAuth PKCE +
+`context.propose`) so a shareable URL lands sooner; depended only on
+2b.2's HTTP surface and 2b.3's crypto, both shipped.
 
 Forward-looking plan context in [`phase-2-plan.md`](phase-2-plan.md);
 live status in [`../implementation-status.md`](../implementation-status.md).
@@ -198,21 +198,22 @@ Bundle footprint after these views:
 - `index.css` — 13 KB (3 KB gzipped)
 - `ourtex_crypto_wasm_bg.wasm` — 82 KB
 
-### Still open on 2b.4
+### Cuts at close (2026-04-25)
 
-- **Graph view** — optional; `react-force-graph-2d` transferred
-  directly from desktop works, decision pending on whether a browser
-  UI needs it.
-- **Onboarding chat** — desktop's `OnboardingView.tsx` calls a
-  Tauri-specific Anthropic-key-holding command. The web client
-  needs a server-mediated chat route before it can mirror this;
-  punt to 2c or later.
-- **Session token hardening** — move off `localStorage` to an
-  httpOnly cookie issued by `/v1/auth/login`. Requires CSRF
-  protection on state-changing routes; fold into 2b.5 when the
-  auth surface is reworked for OAuth PKCE anyway.
-- **OS keychain (desktop follow-up, not blocking web).** Still open
-  from 2b.3.
+- **Graph view dropped** from both clients. Desktop's `GraphView.tsx`
+  + `react-force-graph-2d` removed; web never adopted them. The
+  view didn't carry its weight against the documents list.
+- **Onboarding chat → Phase 3 platform.** Desktop's
+  `OnboardingView.tsx` calls a Tauri-specific Anthropic-key-holding
+  command. Web needs a server-mediated chat route, which fits
+  better alongside the agent-observer plumbing; bundled into
+  [`phase-3-platform.md`](phase-3-platform.md).
+- **Session token hardening → 2b.5 opening slice.** Web kept the
+  bearer in `localStorage` at 2b.4 close. The move to httpOnly
+  cookie + CSRF + `/v1/auth/me`-based bootstrap is the first item
+  in 2b.5.
+- **OS keychain (desktop follow-up) → Phase 3 platform.** Still
+  open from 2b.3; bundled with the team/onboarding work.
 
 ### Cuts already made
 

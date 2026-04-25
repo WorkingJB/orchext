@@ -11,6 +11,10 @@ pub struct Config {
     pub database_url: String,
     pub bind: String,
     pub db_max_connections: u32,
+    /// Whether to issue cookies with the `Secure` flag. Defaults to
+    /// `true` (production). Local HTTP dev needs `OURTEX_SECURE_COOKIES=0`
+    /// or browsers will silently drop the cookie.
+    pub secure_cookies: bool,
 }
 
 impl Config {
@@ -22,11 +26,16 @@ impl Config {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(10);
+        let secure_cookies = env::var("OURTEX_SECURE_COOKIES")
+            .ok()
+            .map(|s| !matches!(s.as_str(), "0" | "false" | "no"))
+            .unwrap_or(true);
 
         Ok(Config {
             database_url,
             bind,
             db_max_connections,
+            secure_cookies,
         })
     }
 }

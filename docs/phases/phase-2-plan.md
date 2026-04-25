@@ -5,11 +5,11 @@ per-sub-milestone plans. Shipped sub-milestones are cross-referenced
 out to their frozen shipped docs; live status lives in
 [`../implementation-status.md`](../implementation-status.md).
 
-**Status snapshot:** Phase 2a, 2b.1, 2b.2, and 2b.3 shipped;
-2b.4 in flight (2026-04-22 — login, tenant picker, browser unlock,
-read-only docs live; writes + tokens + audit parity remaining).
-**Next up:** finish 2b.4, then 2b.5 (`context.propose` + MCP HTTP/SSE
-+ OAuth 2.1 PKCE for agent tokens).
+**Status snapshot:** Phase 2a, 2b.1, 2b.2, 2b.3, and 2b.4 shipped.
+2b.5 in flight (2026-04-25) — opened with the cookie/CSRF auth
+hardening that 2b.4 deferred. Phase 2c teams was absorbed into
+[Phase 3 platform](phase-3-platform.md) on 2026-04-25 alongside
+the web onboarding chat and OS keychain follow-ups.
 
 ---
 
@@ -191,38 +191,32 @@ for the route list, decisions, and test coverage. Highlights:
 - FTS on encrypted rows (re-populate `tsv` during write while a key
   is live).
 
-### Phase 2b.4 — Web client (in flight, opened 2026-04-22)
+### Phase 2b.4 — Web client **[SHIPPED 2026-04-25]**
 
 Separate app, feature-parity with desktop's remote-workspace mode.
-Pulled ahead of MCP HTTP/SSE (previously 2b.4) so a shareable URL
-lands sooner; depends only on 2b.2's HTTP surface and 2b.3's crypto,
-both shipped. Detailed status + decisions live in
+Pulled ahead of MCP HTTP/SSE so a shareable URL lands sooner;
+depended only on 2b.2's HTTP surface and 2b.3's crypto, both
+shipped. Detailed status + decisions live in
 [`phase-2b4-web.md`](phase-2b4-web.md).
 
-**Landed 2026-04-22:**
+**What landed:** login / signup, tenant picker, browser unlock
+(seed-fresh or unwrap-seeded) backed by `ourtex-crypto-wasm`,
+4-min heartbeat, doc CRUD with base-version optimistic
+concurrency, tokens admin, audit list.
 
-- `apps/web` — Vite + React + Tailwind, sibling to `apps/desktop`.
-- `ourtex-crypto-wasm` — new crate; thin wasm-bindgen wrapper around
-  the four crypto ops the browser needs. `ourtex-crypto` itself now
-  compiles to `wasm32-unknown-unknown` without a feature flag
-  (swapped `rand::thread_rng()` → `OsRng`, target-gated
-  `getrandom[js]`; `tokio` was never a dep in the first place — the
-  earlier plan's "strip tokio" note was wrong).
-- Login / signup against `/v1/auth/*`, tenant picker against
-  `/v1/tenants`, browser unlock that seeds-if-fresh or unwraps-if-
-  seeded, heartbeat republish every 4 min, read-only documents
-  view.
+**Cuts that held:**
 
-**Still to wire in 2b.4:**
-
-- Writes (`docWrite`, `docDelete`) with base-version-checked editor.
-- Tokens + audit views (parity with desktop).
-- Graph view (optional — decision pending).
-- Session token hardening (move off `localStorage` to an httpOnly
-  cookie issued by login; folds into 2b.5 CSRF work).
-- Onboarding chat — desktop's flow reaches Anthropic via a
-  Tauri-only command; web needs a server-mediated route before it
-  can mirror this. Likely punted to 2c or later.
+- **Graph view dropped** from both clients on 2026-04-25 — the
+  desktop `GraphView.tsx` + `react-force-graph-2d` were removed,
+  and the web client never adopted them.
+- **Onboarding chat deferred to Phase 3 platform.** Desktop's
+  flow reaches Anthropic via a Tauri-only command; web needs a
+  server-mediated proxy that's better introduced alongside the
+  agent-observer work. See
+  [`phase-3-platform.md`](phase-3-platform.md).
+- **Session token hardening rolled into 2b.5.** Web still parked
+  the bearer in `localStorage` at 2b.4 close; the move to httpOnly
+  cookie + CSRF is the opening slice of 2b.5.
 
 **Unchanged commitments:**
 
@@ -232,42 +226,38 @@ both shipped. Detailed status + decisions live in
   go through 2b.5's HTTP/SSE MCP. Until then, the web UI just
   doesn't offer a "connect an agent" affordance.
 
-### Phase 2b.5 — `context.propose` + MCP HTTP/SSE
+### Phase 2b.5 — Auth hardening + MCP HTTP/SSE (in flight, opened 2026-04-25)
 
-Finally makes the server reachable by external agents over MCP.
+Four slices, in order:
 
-- **MCP transport** on `ourtex-server`: JSON-RPC over HTTP + SSE
-  per `MCP.md` §2.2. Same tools, same error model.
-- **OAuth 2.1 + PKCE** for agent token issuance — rolled (D16).
-  Authorization-code + PKCE, audience-bound bearer tokens, issued
-  by the logged-in user via the desktop/web UI. Opaque token shape
-  (still D15) — OAuth defines the *issuance* flow, not the token
-  encoding.
-- **`context.propose`** lands on both surfaces. Desktop + web
-  proposal review queue for admins (2c-ready).
+1. **Web auth hardening** — opening slice. httpOnly `ourtex_session`
+   cookie + readable `ourtex_csrf` cookie issued on login/signup;
+   double-submit CSRF on cookie-authed state-changing requests;
+   bearer flow preserved for desktop. Drops `localStorage` from
+   `apps/web` and replaces session-bootstrapping with an
+   `/v1/auth/me` probe.
+2. **OAuth 2.1 + PKCE** for agent token issuance — rolled (D16).
+   Authorization-code + PKCE, audience-bound bearer tokens, issued
+   by the logged-in user via the desktop/web UI. Opaque token shape
+   (still D15) — OAuth defines the *issuance* flow, not the token
+   encoding.
+3. **MCP transport** on `ourtex-server`: JSON-RPC over HTTP + SSE
+   per `MCP.md` §2.2. Same tools, same error model.
+4. **`context.propose`** lands on both surfaces. Desktop + web
+   proposal review queue for admins (Phase 3 platform-ready).
 
 **Unblocks after full 2b:** use case 2 end-to-end. Also a power-user
 flavor of use case 1 (own server, own devices).
 
-### Phase 2c — Teams and org context
+### Phase 2c — Teams and org context **[MOVED to Phase 3 platform 2026-04-25]**
 
-Multi-tenant on the same server, plus team semantics.
-
-- **Crates touched:**
-  - `ourtex-server` — membership table, role middleware, workspace
-    routing (`/w/:id/...`), invite flow, first-user-is-admin (D10).
-  - `ourtex-vault` — seed `org/` type directory, `org:` visibility
-    label.
-  - `ourtex-auth` — workspace-aware tokens, role-derived default
-    scopes (D11).
-  - `ourtex-desktop` + `apps/web` — team management UI (members,
-    invites, role change), org-context editor (admin), propose-to-org
-    (member).
-- **SaaS is just multi-tenant signups on the same image.**
-  On-prem is the same image inside the customer's firewall.
-- **Unblocks:** use cases 3 and 4.
-- **Cuts:** no billing integration (out of scope per user);
-  no SCIM/SAML (add if enterprise customers ask); no per-doc ACLs.
+Originally scoped to land before Phase 3a. Folded into
+[`phase-3-platform.md`](phase-3-platform.md) along with the web
+onboarding chat and OS keychain follow-ups, because none of these
+items block 2b.5 and bundling them keeps the rebrand sweep clean.
+Decisions D10 and D11 carry over verbatim. Same scope, same crates
+(`ourtex-server`, `ourtex-vault`, `ourtex-auth`, `apps/desktop`,
+`apps/web`); same cuts (no billing, no SCIM/SAML, no per-doc ACLs).
 
 ## New crates / apps summary
 

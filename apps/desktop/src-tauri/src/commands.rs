@@ -708,68 +708,6 @@ pub async fn doc_delete(state: State<'_, AppState>, id: String) -> Result<(), St
     Ok(())
 }
 
-// ---------------- graph ----------------
-
-#[derive(Debug, Serialize)]
-pub struct GraphNode {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub type_: String,
-    pub title: String,
-    pub visibility: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GraphEdge {
-    pub source: String,
-    pub target: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GraphSnapshot {
-    pub nodes: Vec<GraphNode>,
-    pub edges: Vec<GraphEdge>,
-}
-
-#[tauri::command]
-pub async fn graph_snapshot(state: State<'_, AppState>) -> Result<GraphSnapshot, String> {
-    let svcs = state.active_services().await?;
-    let items = svcs
-        .index
-        .list(Default::default())
-        .await
-        .map_err(|e| format!("list: {e}"))?;
-
-    let mut nodes = Vec::with_capacity(items.len());
-    let mut known = std::collections::HashSet::with_capacity(items.len());
-    for it in items {
-        known.insert(it.id.clone());
-        nodes.push(GraphNode {
-            id: it.id,
-            type_: it.type_,
-            title: it.title,
-            visibility: it.visibility,
-        });
-    }
-
-    let raw_edges = svcs
-        .index
-        .all_edges()
-        .await
-        .map_err(|e| format!("edges: {e}"))?;
-
-    // Keep only edges where both endpoints are in the current node set.
-    // An unresolved target (a link to something not in the vault) would
-    // render as a dangling node; skip for v1 clarity.
-    let edges = raw_edges
-        .into_iter()
-        .filter(|(s, t)| known.contains(s) && known.contains(t))
-        .map(|(source, target)| GraphEdge { source, target })
-        .collect();
-
-    Ok(GraphSnapshot { nodes, edges })
-}
-
 // ---------------- tokens ----------------
 
 #[derive(Debug, Serialize)]

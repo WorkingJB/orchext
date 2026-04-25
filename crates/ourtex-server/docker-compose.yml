@@ -46,6 +46,7 @@ services:
     environment:
       DATABASE_URL: postgres://ourtex:${OURTEX_POSTGRES_PASSWORD:-ourtex-dev-password}@postgres:5432/ourtex
       OURTEX_BIND: 0.0.0.0:8080
+      OURTEX_SECURE_COOKIES: ${OURTEX_SECURE_COOKIES:-0}
       RUST_LOG: ourtex_server=info,axum=info,sqlx=warn
     ports:
       - "8080:8080"

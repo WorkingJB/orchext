@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiFailure, CryptoState, Membership } from "./api";
-import { clearSession, loadSession, StoredSession } from "./session";
+import { SessionProfile } from "./session";
 import { LoginView } from "./LoginView";
 import { TenantPicker } from "./TenantPicker";
 import { DocumentsView } from "./DocumentsView";
@@ -10,6 +10,15 @@ import { UnlockView } from "./UnlockView";
 import { Heartbeat, startHeartbeat } from "./heartbeat";
 
 type View = "documents" | "tokens" | "audit";
+
+// Top-level auth state. `bootstrapping` is the brief window between
+// app load and the `/v1/auth/me` probe completing — don't render
+// LoginView until we know the cookie is no good, or we'll flash the
+// form on every reload.
+type AuthState =
+  | { kind: "bootstrapping" }
+  | { kind: "anonymous" }
+  | { kind: "authenticated"; profile: SessionProfile };
 
 // Tri-state: what does this browser hold for the current tenant?
 //   "checking"  — waiting on /vault/crypto
@@ -21,15 +30,38 @@ type WorkspaceState =
   | { kind: "locked" };
 
 export default function App() {
-  const [session, setSession] = useState<StoredSession | null>(() =>
-    loadSession()
-  );
+  const [auth, setAuth] = useState<AuthState>({ kind: "bootstrapping" });
   const [tenant, setTenant] = useState<Membership | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState>({
     kind: "checking",
   });
   const [heartbeat, setHeartbeatHandle] = useState<Heartbeat | null>(null);
   const [view, setView] = useState<View>("documents");
+
+  // Probe the cookie-backed session on mount. 200 ⇒ authenticated;
+  // anything else ⇒ no session, fall through to login.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .me()
+      .then((resp) => {
+        if (cancelled) return;
+        setAuth({
+          kind: "authenticated",
+          profile: {
+            accountId: resp.account.id,
+            email: resp.account.email,
+            displayName: resp.account.display_name,
+          },
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setAuth({ kind: "anonymous" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Hop back to documents when the tenant changes so a "tokens" or
   // "audit" selection from a previous tenant doesn't stick.
@@ -88,8 +120,7 @@ export default function App() {
         console.warn("logout failed", e);
       }
     }
-    clearSession();
-    setSession(null);
+    setAuth({ kind: "anonymous" });
     setTenant(null);
     setWorkspace({ kind: "checking" });
   }
@@ -103,8 +134,21 @@ export default function App() {
     setWorkspace({ kind: "checking" });
   }
 
-  if (!session) {
-    return <LoginView onAuthenticated={setSession} />;
+  if (auth.kind === "bootstrapping") {
+    return (
+      <div className="h-full flex items-center justify-center text-neutral-500">
+        Loading…
+      </div>
+    );
+  }
+  if (auth.kind === "anonymous") {
+    return (
+      <LoginView
+        onAuthenticated={(profile) =>
+          setAuth({ kind: "authenticated", profile })
+        }
+      />
+    );
   }
   if (!tenant) {
     return <TenantPicker onPicked={setTenant} />;
@@ -122,7 +166,7 @@ export default function App() {
           {tenant.name}
         </button>
         <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600">
-          <span>{session.displayName}</span>
+          <span>{auth.profile.displayName}</span>
           <button
             onClick={logout}
             className="text-neutral-500 hover:text-neutral-900"

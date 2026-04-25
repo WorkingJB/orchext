@@ -4,7 +4,13 @@
 // Dev server proxies `/v1/*` → the ourtex-server (see vite.config.ts);
 // production builds will need either same-origin hosting or an explicit
 // OURTEX_API_BASE build-time constant.
-import { loadSession } from "./session";
+//
+// Auth: cookie-based. The browser sends `ourtex_session` (HttpOnly)
+// automatically on every same-origin request; we attach
+// `X-Ourtex-CSRF` to the readable `ourtex_csrf` cookie value on
+// state-changing requests (double-submit pattern). All fetches use
+// `credentials: 'include'` so the cookies are actually sent.
+import { getCsrfToken } from "./session";
 
 export type ApiError = {
   tag: string;
@@ -22,19 +28,24 @@ export class ApiFailure extends Error {
   }
 }
 
+const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  const session = loadSession();
-  if (session) headers["Authorization"] = `Bearer ${session.token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (MUTATING.has(method)) {
+    const csrf = getCsrfToken();
+    if (csrf) headers["X-Ourtex-CSRF"] = csrf;
+  }
 
   const res = await fetch(path, {
     method,
     headers,
+    credentials: "include",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
@@ -59,8 +70,13 @@ export type AccountDto = {
 
 export type SessionIssued = {
   id: string;
+  /// Opaque session secret. Browser callers can ignore this — the
+  /// server also sets `ourtex_session` (HttpOnly) and `ourtex_csrf`
+  /// cookies in the same response. Native callers (desktop, agents)
+  /// use it as a bearer.
   secret: string;
   expires_at: string;
+  csrf_token: string;
 };
 
 export type LoginResponse = { account: AccountDto; session: SessionIssued };

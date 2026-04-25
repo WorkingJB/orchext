@@ -36,7 +36,6 @@ pub fn run() {
             commands::doc_read,
             commands::doc_write,
             commands::doc_delete,
-            commands::graph_snapshot,
             commands::settings_status,
             commands::settings_set_api_key,
             commands::onboarding_chat,

@@ -1,13 +1,13 @@
 import { FormEvent, useState } from "react";
 import { api, ApiFailure } from "./api";
-import { saveSession, StoredSession } from "./session";
+import { SessionProfile } from "./session";
 
 type Mode = "login" | "signup";
 
 export function LoginView({
   onAuthenticated,
 }: {
-  onAuthenticated: (s: StoredSession) => void;
+  onAuthenticated: (profile: SessionProfile) => void;
 }) {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -25,15 +25,14 @@ export function LoginView({
         mode === "login"
           ? await api.login(email, password)
           : await api.signup(email, password, displayName || undefined);
-      const session: StoredSession = {
-        token: resp.session.secret,
+      // Server issues an HttpOnly session cookie + a readable CSRF
+      // cookie in the same response — nothing for us to persist
+      // client-side beyond the display profile.
+      onAuthenticated({
         accountId: resp.account.id,
         email: resp.account.email,
         displayName: resp.account.display_name,
-        expiresAt: resp.session.expires_at,
-      };
-      saveSession(session);
-      onAuthenticated(session);
+      });
     } catch (e) {
       setError(e instanceof ApiFailure ? e.message : String(e));
     } finally {
@@ -67,7 +66,7 @@ export function LoginView({
           type="password"
           autoComplete={mode === "login" ? "current-password" : "new-password"}
           required
-          minLength={mode === "signup" ? 12 : undefined}
+          minLength={mode === "signup" ? 8 : undefined}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full border border-neutral-300 rounded-md px-3 py-2 mb-3 text-sm"

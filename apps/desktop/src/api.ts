@@ -95,23 +95,6 @@ export type VaultChanged = {
   kind: "upsert" | "remove";
 };
 
-export type GraphNode = {
-  id: string;
-  type: string;
-  title: string;
-  visibility: string;
-};
-
-export type GraphEdge = {
-  source: string;
-  target: string;
-};
-
-export type GraphSnapshot = {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-};
-
 export type SettingsInfo = {
   has_api_key: boolean;
 };
@@ -148,7 +131,6 @@ export const api = {
   tokenRevoke: (id: string) => invoke<void>("token_revoke", { id }),
   auditList: (limit?: number) =>
     invoke<AuditPage>("audit_list", { limit: limit ?? null }),
-  graphSnapshot: () => invoke<GraphSnapshot>("graph_snapshot"),
   settingsStatus: () => invoke<SettingsInfo>("settings_status"),
   settingsSetApiKey: (apiKey: string) =>
     invoke<void>("settings_set_api_key", { apiKey }),

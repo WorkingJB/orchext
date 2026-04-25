@@ -1,39 +1,32 @@
-// Session-token persistence for the web client.
+// Session bootstrap for the web client.
 //
-// localStorage is a pragmatic first pass: same-origin only, survives a
-// reload, lets the bearer attach from a single source. It is vulnerable
-// to XSS; moving to an httpOnly cookie issued by the server is a
-// follow-up once 2b.5 hardens the auth surface end-to-end.
-const KEY = "ourtex.session.v1";
+// Phase 2b.5 moved the session token off `localStorage` and onto an
+// httpOnly `ourtex_session` cookie issued by the server. This module
+// holds only the *display-only* account profile loaded from
+// `/v1/auth/me`; the bearer secret never reaches JS.
+//
+// CSRF: the server also sets a non-HttpOnly `ourtex_csrf` cookie on
+// login/signup. `getCsrfToken()` reads that cookie value and the API
+// client mirrors it back as `X-Ourtex-CSRF` on state-changing
+// requests (double-submit pattern).
 
-export type StoredSession = {
-  token: string;
+export type SessionProfile = {
   accountId: string;
   email: string;
   displayName: string;
-  expiresAt: string;
 };
 
-export function loadSession(): StoredSession | null {
-  const raw = localStorage.getItem(KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as StoredSession;
-    if (new Date(parsed.expiresAt).getTime() <= Date.now()) {
-      localStorage.removeItem(KEY);
-      return null;
+const CSRF_COOKIE = "ourtex_csrf";
+
+export function getCsrfToken(): string | null {
+  const all = document.cookie.split(";");
+  for (const raw of all) {
+    const eq = raw.indexOf("=");
+    if (eq < 0) continue;
+    const name = raw.slice(0, eq).trim();
+    if (name === CSRF_COOKIE) {
+      return decodeURIComponent(raw.slice(eq + 1).trim());
     }
-    return parsed;
-  } catch {
-    localStorage.removeItem(KEY);
-    return null;
   }
-}
-
-export function saveSession(session: StoredSession): void {
-  localStorage.setItem(KEY, JSON.stringify(session));
-}
-
-export function clearSession(): void {
-  localStorage.removeItem(KEY);
+  return null;
 }

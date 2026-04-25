@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, VaultInfo } from "./api";
 import { DocumentsView } from "./DocumentsView";
-import { GraphView } from "./GraphView";
 import { OnboardingView } from "./OnboardingView";
 import { TokensView } from "./TokensView";
 import { AuditView } from "./AuditView";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
-type View = "documents" | "graph" | "onboarding" | "tokens" | "audit";
+type View = "documents" | "onboarding" | "tokens" | "audit";
 
 type Counts = {
   documents: number;
@@ -26,7 +25,6 @@ export function Layout({
   const [view, setView] = useState<View>(
     vault.document_count === 0 ? "onboarding" : "documents"
   );
-  const [focusDocId, setFocusDocId] = useState<string | null>(null);
   const [counts, setCounts] = useState<Counts>({
     documents: vault.document_count,
     tokens: 0,
@@ -52,7 +50,6 @@ export function Layout({
   // against the newly-active vault.
   useEffect(() => {
     setView(vault.document_count === 0 ? "onboarding" : "documents");
-    setFocusDocId(null);
     setCounts({ documents: vault.document_count, tokens: 0, audit: 0 });
     void refreshCounts();
   }, [vault.workspace_id, vault.document_count, refreshCounts]);
@@ -71,12 +68,6 @@ export function Layout({
             count={counts.documents}
             active={view === "documents"}
             onClick={() => setView("documents")}
-          />
-          <NavBtn
-            label="Graph"
-            count={counts.documents}
-            active={view === "graph"}
-            onClick={() => setView("graph")}
           />
           <NavBtn
             label="Onboarding"
@@ -99,19 +90,7 @@ export function Layout({
         </nav>
         <main key={vault.workspace_id} className="flex-1 min-w-0 bg-neutral-50">
           {view === "documents" && (
-            <DocumentsView
-              onMutated={refreshCounts}
-              initialSelectedId={focusDocId}
-              onSelectionConsumed={() => setFocusDocId(null)}
-            />
-          )}
-          {view === "graph" && (
-            <GraphView
-              onSelectDoc={(id) => {
-                setFocusDocId(id);
-                setView("documents");
-              }}
-            />
+            <DocumentsView onMutated={refreshCounts} />
           )}
           {view === "onboarding" && (
             <OnboardingView

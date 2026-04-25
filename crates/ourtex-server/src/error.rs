@@ -21,6 +21,12 @@ pub enum ApiError {
     #[error("unauthorized")]
     Unauthorized,
 
+    /// CSRF check failed on a cookie-authed state-changing request.
+    /// Distinct from `Unauthorized` because the session itself is
+    /// valid — the client just didn't double-submit the CSRF token.
+    #[error("csrf check failed")]
+    CsrfFailed,
+
     #[error("not found")]
     NotFound,
 
@@ -46,6 +52,7 @@ impl ApiError {
     fn status(&self) -> StatusCode {
         match self {
             ApiError::Unauthorized => StatusCode::UNAUTHORIZED,
+            ApiError::CsrfFailed => StatusCode::FORBIDDEN,
             ApiError::NotFound => StatusCode::NOT_FOUND,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::InvalidArgument(_) => StatusCode::BAD_REQUEST,
@@ -60,6 +67,7 @@ impl ApiError {
     fn tag(&self) -> &'static str {
         match self {
             ApiError::Unauthorized => "unauthorized",
+            ApiError::CsrfFailed => "csrf_failed",
             ApiError::NotFound => "not_found",
             ApiError::Conflict(_) => "conflict",
             ApiError::InvalidArgument(_) => "invalid_argument",
@@ -93,6 +101,7 @@ impl IntoResponse for ApiError {
                 tag: self.tag(),
                 message: match &self {
                     ApiError::Unauthorized => "authentication required".into(),
+                    ApiError::CsrfFailed => "csrf token missing or invalid".into(),
                     ApiError::NotFound => "resource not found".into(),
                     ApiError::Conflict(m) => (*m).to_string(),
                     ApiError::InvalidArgument(m) => m.clone(),
