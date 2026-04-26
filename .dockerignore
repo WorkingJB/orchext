@@ -1,0 +1,36 @@
+# Build context exclusions for `crates/orchext-server/Dockerfile`.
+# The Fly remote builder uploads everything *not* listed here, so
+# anything large or local-only must be excluded — without this, the
+# Rust `target/` directory alone is several GB.
+
+# Rust build artifacts (workspace + per-crate).
+target/
+**/target/
+
+# Node modules and web build output.
+node_modules/
+**/node_modules/
+apps/web/dist/
+
+# Git metadata and editor state.
+.git/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+.DS_Store
+
+# Local environment + secrets — never ship these into an image.
+.env
+.env.*
+*.local
+
+# Local Claude/agent state.
+.claude/
+memory/
+
+# Documentation and deploy configs that don't belong in the image.
+docs/
+deploy/
+README.md
+*.md
