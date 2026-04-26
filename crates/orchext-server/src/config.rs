@@ -15,6 +15,14 @@ pub struct Config {
     /// `true` (production). Local HTTP dev needs `ORCHEXT_SECURE_COOKIES=0`
     /// or browsers will silently drop the cookie.
     pub secure_cookies: bool,
+    /// Origins allowed to make credentialed cross-origin requests.
+    /// Empty (the default) means **no CORS layer is mounted** —
+    /// cross-origin browsers get the standard browser-side block, no
+    /// preflight is answered, no headers are echoed. The hosted SaaS
+    /// deployment is same-origin via Vercel rewrites and leaves this
+    /// empty; self-hosters who serve the web app from a different
+    /// origin set the comma-separated list here.
+    pub cors_allow_origins: Vec<String>,
 }
 
 impl Config {
@@ -30,12 +38,22 @@ impl Config {
             .ok()
             .map(|s| !matches!(s.as_str(), "0" | "false" | "no"))
             .unwrap_or(true);
+        let cors_allow_origins = env::var("ORCHEXT_CORS_ALLOW_ORIGINS")
+            .ok()
+            .map(|s| {
+                s.split(',')
+                    .map(|o| o.trim().to_string())
+                    .filter(|o| !o.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
 
         Ok(Config {
             database_url,
             bind,
             db_max_connections,
             secure_cookies,
+            cors_allow_origins,
         })
     }
 }

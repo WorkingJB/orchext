@@ -24,9 +24,15 @@ pub mod sessions;
 pub mod tenants;
 pub mod tokens;
 
-use axum::{middleware, routing::get, Router};
+use axum::{
+    http::{header, HeaderValue, Method},
+    middleware,
+    routing::get,
+    Router,
+};
 use sqlx::PgPool;
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 
 /// Shared handle passed to every request handler.
 #[derive(Clone)]
@@ -121,6 +127,7 @@ pub fn router(state: AppState) -> Router {
 
     Router::new()
         .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
         .nest("/v1/auth", auth::router(state.clone()))
         .nest("/v1/oauth", oauth_routes)
         .nest("/v1/mcp", mcp::router())
@@ -133,9 +140,70 @@ async fn healthz() -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({ "ok": true }))
 }
 
+// `/readyz` is a deeper check than `/healthz`: it confirms the server can
+// actually talk to Postgres. Orchestrators (Fly's `[[http_service.checks]]`,
+// Kubernetes readiness probes, docker-compose's `healthcheck`) should hit
+// this one — a process that's listening but can't reach its DB shouldn't
+// receive traffic. `/healthz` stays cheap and DB-free for liveness.
+async fn readyz(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
+    sqlx::query("SELECT 1")
+        .execute(&state.db)
+        .await
+        .map_err(|err| {
+            tracing::warn!(error = %err, "readyz: db check failed");
+            axum::http::StatusCode::SERVICE_UNAVAILABLE
+        })?;
+    Ok(axum::Json(serde_json::json!({ "ok": true })))
+}
+
 /// Run embedded migrations against the provided pool. Called from
 /// `main` on startup so the server is usable out of the box; tests
 /// call it explicitly.
 pub async fn migrate(db: &PgPool) -> Result<(), sqlx::migrate::MigrateError> {
     sqlx::migrate!("./migrations").run(db).await
+}
+
+/// Build a CORS layer from a list of allowed origins. Returns `None`
+/// when the list is empty — the caller should then mount no CORS
+/// middleware at all, which is the secure default. The hosted SaaS
+/// deployment runs same-origin via Vercel rewrites so production
+/// returns `None`; self-hosters who serve the web app from a separate
+/// origin opt in via `ORCHEXT_CORS_ALLOW_ORIGINS`.
+///
+/// `allow_credentials(true)` is required because the SPA relies on
+/// cookies (`credentials: 'include'`); the trade-off is that origins
+/// must be enumerated explicitly (the spec forbids `*` with
+/// credentials).
+pub fn cors_layer(origins: &[String]) -> Option<CorsLayer> {
+    if origins.is_empty() {
+        return None;
+    }
+    let parsed: Vec<HeaderValue> = origins
+        .iter()
+        .filter_map(|o| HeaderValue::from_str(o).ok())
+        .collect();
+    if parsed.is_empty() {
+        // Every origin failed to parse; treat the same as empty.
+        return None;
+    }
+    Some(
+        CorsLayer::new()
+            .allow_origin(parsed)
+            .allow_credentials(true)
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers([
+                header::CONTENT_TYPE,
+                header::AUTHORIZATION,
+                axum::http::HeaderName::from_static("x-orchext-csrf"),
+            ])
+            .max_age(std::time::Duration::from_secs(3600)),
+    )
 }

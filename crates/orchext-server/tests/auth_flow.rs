@@ -318,6 +318,84 @@ async fn healthz_ok(db: PgPool) {
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn readyz_ok_when_db_reachable(db: PgPool) {
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/readyz")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[test]
+fn cors_layer_returns_none_for_empty_origin_list() {
+    assert!(orchext_server::cors_layer(&[]).is_none());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn cors_echoes_allowed_origin(db: PgPool) {
+    let allowed = "https://app.example.com".to_string();
+    let cors = orchext_server::cors_layer(&[allowed.clone()])
+        .expect("cors layer present when origin given");
+    let app = router(AppState::new(db).with_rate_limit_auth(false)).layer(cors);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/healthz")
+                .header("origin", &allowed)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        resp.headers()
+            .get("access-control-allow-origin")
+            .and_then(|v| v.to_str().ok()),
+        Some(allowed.as_str()),
+        "allowed origin must be echoed back"
+    );
+    assert_eq!(
+        resp.headers()
+            .get("access-control-allow-credentials")
+            .and_then(|v| v.to_str().ok()),
+        Some("true"),
+        "credentials must be allowed for cookie auth"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn cors_does_not_echo_disallowed_origin(db: PgPool) {
+    let cors = orchext_server::cors_layer(&["https://app.example.com".to_string()])
+        .expect("cors layer present when origin given");
+    let app = router(AppState::new(db).with_rate_limit_auth(false)).layer(cors);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/healthz")
+                .header("origin", "https://evil.example.com")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    // Response still completes (CORS is a browser-side enforcement),
+    // but no allow-origin header for the wrong origin.
+    assert!(
+        resp.headers().get("access-control-allow-origin").is_none(),
+        "disallowed origin must not be echoed"
+    );
+}
+
 // ---------- helpers ----------
 
 fn signup_req(email: &str, password: &str) -> Request<Body> {

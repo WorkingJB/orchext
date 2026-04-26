@@ -25,7 +25,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("migrations applied");
 
     let state = AppState::new(db).with_secure_cookies(config.secure_cookies);
-    let app = router(state);
+    let mut app = router(state);
+    if let Some(cors) = orchext_server::cors_layer(&config.cors_allow_origins) {
+        tracing::info!(
+            origins = ?config.cors_allow_origins,
+            "CORS enabled for explicit origins"
+        );
+        app = app.layer(cors);
+    }
 
     let addr: SocketAddr = config.bind.parse()?;
     let listener = TcpListener::bind(addr).await?;
