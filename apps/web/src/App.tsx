@@ -7,6 +7,7 @@ import { DocumentsView } from "./DocumentsView";
 import { TokensView } from "./TokensView";
 import { AuditView } from "./AuditView";
 import { UnlockView } from "./UnlockView";
+import { ConsentView } from "./ConsentView";
 import { Heartbeat, startHeartbeat } from "./heartbeat";
 
 type View = "documents" | "tokens" | "audit";
@@ -29,7 +30,17 @@ type WorkspaceState =
   | { kind: "ready"; contentKey: string | null }
   | { kind: "locked" };
 
+// OAuth consent surface lives at its own path. We detect it once at
+// mount and short-circuit the normal app shell so the user lands on
+// the consent prompt without seeing the tenant picker / docs view.
+const IS_CONSENT_ROUTE = window.location.pathname === "/oauth/authorize";
+
 export default function App() {
+  if (IS_CONSENT_ROUTE) return <ConsentView />;
+  return <MainApp />;
+}
+
+function MainApp() {
   const [auth, setAuth] = useState<AuthState>({ kind: "bootstrapping" });
   const [tenant, setTenant] = useState<Membership | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState>({

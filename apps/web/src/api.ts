@@ -159,6 +159,27 @@ export type IssueTokenResponse = {
   token: PublicToken;
 };
 
+// ---------- OAuth ----------
+
+export type OAuthAuthorizeRequest = {
+  tenant_id: string;
+  client_label: string;
+  redirect_uri: string;
+  scope: string[];
+  mode: "read" | "read_propose";
+  code_challenge: string;
+  code_challenge_method: string;
+  ttl_days: number | null;
+  max_docs: number | null;
+  max_bytes: number | null;
+};
+
+export type OAuthAuthorizeResponse = {
+  code: string;
+  redirect_uri: string;
+  expires_in: number;
+};
+
 // ---------- Audit ----------
 
 export type AuditRow = {
@@ -238,6 +259,9 @@ export const api = {
       `/v1/t/${tenantId}/vault/docs/${encodeURIComponent(docId)}${q}`
     );
   },
+
+  oauthAuthorize: (input: OAuthAuthorizeRequest) =>
+    request<OAuthAuthorizeResponse>("POST", "/v1/oauth/authorize", input),
 
   tokenList: (tenantId: string) =>
     request<{ tokens: PublicToken[] }>("GET", `/v1/t/${tenantId}/tokens`),
