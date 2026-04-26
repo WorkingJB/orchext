@@ -1,0 +1,33 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/v1/:path*",
+      "has": [{ "type": "host", "value": "app.orchext.ai" }],
+      "destination": "https://orchext-prod.fly.dev/v1/:path*"
+    },
+    {
+      "source": "/healthz",
+      "has": [{ "type": "host", "value": "app.orchext.ai" }],
+      "destination": "https://orchext-prod.fly.dev/healthz"
+    },
+    {
+      "source": "/v1/:path*",
+      "has": [{ "type": "host", "value": "test-app.orchext.ai" }],
+      "destination": "https://orchext-test.fly.dev/v1/:path*"
+    },
+    {
+      "source": "/healthz",
+      "has": [{ "type": "host", "value": "test-app.orchext.ai" }],
+      "destination": "https://orchext-test.fly.dev/healthz"
+    },
+    {
+      "source": "/v1/:path*",
+      "destination": "https://orchext-test.fly.dev/v1/:path*"
+    },
+    {
+      "source": "/healthz",
+      "destination": "https://orchext-test.fly.dev/healthz"
+    }
+  ]
+}

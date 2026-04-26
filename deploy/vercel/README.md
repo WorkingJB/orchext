@@ -32,22 +32,18 @@ For each project (`-prod` and `-test`):
 5. **Environment variables** (per project, all environments):
    - `VITE_ENV_NAME` = `production` or `test` (cosmetic — drives any
      env-banner UI).
-6. **Rewrites**: configure under *Project Settings → Rewrites*.
-   Each project gets its own rewrites (prod and test point at
-   different Fly apps), so we don't commit a `vercel.json` — that
-   would lock both projects into the same destination.
+6. **Rewrites**: handled by [`apps/web/vercel.json`](../../apps/web/vercel.json),
+   which both projects share. Each rewrite is gated by a `has` clause
+   matching on the request `host` header — `app.orchext.ai` rewrites
+   to `orchext-prod.fly.dev`, `test-app.orchext.ai` rewrites to
+   `orchext-test.fly.dev`. A trailing fallback rule sends any other
+   host (preview deploys, `*.vercel.app`) to the test API so previews
+   never accidentally hit production data.
 
-   For each project, add two rewrites mapping the API and healthcheck
-   paths to the matching Fly hostname:
-
-   | Source | Production destination | Test destination |
-   |---|---|---|
-   | `/v1/:path*` | `https://orchext-prod.fly.dev/v1/:path*` | `https://orchext-test.fly.dev/v1/:path*` |
-   | `/healthz`   | `https://orchext-prod.fly.dev/healthz`   | `https://orchext-test.fly.dev/healthz` |
-
-   Why no `vercel.json`: the file would need different destinations
-   per environment, and Vercel rewrites don't support env-var
-   substitution. UI-only avoids a stale-URL footgun.
+   Why one `vercel.json` works for both projects: host-based `has`
+   matching makes the destination conditional on the inbound host,
+   which is the per-environment signal we need. No env-var
+   substitution required, no per-branch divergence.
 
 ## Why no Vercel Functions
 
@@ -68,9 +64,9 @@ proxy the API. Reasons:
 | Lives in repo | Lives in Vercel |
 |---|---|
 | `apps/web/` source | Project itself, build/install config |
-| `apps/web/vercel.json` (rewrites) | Domain bindings, DNS verification |
+| `apps/web/vercel.json` (host-conditional rewrites) | Domain bindings, DNS verification |
 | `VITE_*` env names referenced by code | Env values per environment |
-| Build command (Vercel reads from project settings) | Production-branch mapping |
+| Build command, root dir, framework preset | Production-branch mapping |
 
 Treat the Vercel UI as a deployment target, not a source of truth.
 If a setting is meaningful enough to track, it belongs in code or in

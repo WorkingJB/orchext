@@ -99,29 +99,33 @@ environment, both deployed from the same Git repo.
 
 The browser must see one origin so the existing cookie model
 (`HttpOnly` + `Secure` + `SameSite=Lax`) keeps working without any
-server change. Vercel's *Project Settings → Rewrites* does this
-transparently:
+server change. The committed [`apps/web/vercel.json`](../apps/web/vercel.json)
+configures rewrites with host-conditional `has` clauses:
 
-| Source path | Prod destination | Test destination |
+| Source path | Match | Destination |
 |---|---|---|
-| `/v1/:path*` | `https://orchext-prod.fly.dev/v1/:path*` | `https://orchext-test.fly.dev/v1/:path*` |
-| `/healthz`   | `https://orchext-prod.fly.dev/healthz`   | `https://orchext-test.fly.dev/healthz` |
+| `/v1/:path*` | host = `app.orchext.ai` | `https://orchext-prod.fly.dev/v1/:path*` |
+| `/healthz`   | host = `app.orchext.ai` | `https://orchext-prod.fly.dev/healthz` |
+| `/v1/:path*` | host = `test-app.orchext.ai` | `https://orchext-test.fly.dev/v1/:path*` |
+| `/healthz`   | host = `test-app.orchext.ai` | `https://orchext-test.fly.dev/healthz` |
+| `/v1/:path*` | (fallback) | `https://orchext-test.fly.dev/v1/:path*` |
+| `/healthz`   | (fallback) | `https://orchext-test.fly.dev/healthz` |
 
-Configured per Vercel project via the dashboard — **not** in a
-committed `vercel.json`. That file would force both projects to
-point at the same Fly app (Vercel rewrites don't support env-var
-substitution), and "single in-repo config that's wrong for one
-environment" is worse than the small duplication of two UI
-settings. The browser only ever sees `app.orchext.ai` — no CORS,
-no `SameSite=None`, no cross-origin cookie surface.
+One `vercel.json` works for both projects because Vercel evaluates
+rewrites in order and matches each rule's `has` clause against the
+inbound request host. Preview deploys (`*.vercel.app` URLs) hit the
+fallback rules and route to test, so previews never touch
+production data. The browser only ever sees `app.orchext.ai` — no
+CORS, no `SameSite=None`, no cross-origin cookie surface.
 
 ### 3.3 What changes in the codebase
 
 - No code change in `apps/web/src/api.ts` — relative paths already
   work.
 - No code change in `crates/orchext-server`.
-- No `vercel.json` committed; both projects' rewrites live in
-  Vercel's UI (see [`deploy/vercel/README.md`](../deploy/vercel/README.md)).
+- `apps/web/vercel.json` carries host-conditional rewrites; both
+  projects deploy from the same file (see
+  [`deploy/vercel/README.md`](../deploy/vercel/README.md)).
 
 ---
 
@@ -365,10 +369,9 @@ the checklist exists so nothing is forgotten.
 
 - [x] `deploy/fly/orchext-prod.toml`
 - [x] `deploy/fly/orchext-test.toml`
-- [x] `deploy/vercel/README.md` — rewrites configured in the Vercel
-      UI per project (no committed `vercel.json`; rewrites can't be
-      env-substituted, so the file would force both projects to point
-      at the same Fly app).
+- [x] `deploy/vercel/README.md` — points at the committed
+      `apps/web/vercel.json`. Host-conditional `has` rewrites let one
+      file route correctly for both prod and test projects.
 - [x] `deploy/README.md` linking back to this document and listing
       first-time bring-up steps.
 
@@ -531,6 +534,7 @@ without code change beyond config.
 |---|---|---|
 | 2026-04-26 | Vercel for SPA, Fly.io for API, Neon for DB | Cheapest viable shape that preserves self-host parity (§1, §9). |
 | 2026-04-26 | Vercel rewrites instead of cross-origin API | Keeps cookies first-party; no server CORS or `SameSite=None` (§3.2). |
+| 2026-04-26 | Single committed `apps/web/vercel.json` with host-conditional `has` rewrites | Earlier doc claimed `vercel.json` couldn't switch destinations per env; host-based `has` clauses do exactly that, and a committed file beats two manually-managed dashboard configs (§3.2). |
 | 2026-04-26 | Neon direct (unpooled) endpoint, not pgbouncer | sqlx 0.8 has its own pool; transaction-mode pooling breaks prepared-statement caching (§5.3). |
 | 2026-04-26 | Skip HA Postgres at launch | Single-node + 7-day PITR is enough until paid users or revenue depends on uptime (§9). |
 | 2026-04-26 | API hostname not yet published | No third-party MCP clients yet; deferring `api.orchext.ai` keeps the cookie story simpler (§13). |
