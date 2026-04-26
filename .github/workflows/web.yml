@@ -61,3 +61,15 @@ jobs:
       - name: Build (wasm + tsc + vite)
         working-directory: apps/web
         run: npm run build
+
+      # Vercel deploys without a Rust toolchain and consumes the
+      # committed apps/web/src/wasm/ output. CI does have rust+wasm-pack,
+      # so it rebuilds the artefact via `prebuild` — this step fails the
+      # PR if a crypto-wasm source change wasn't accompanied by a
+      # rebuilt artefact.
+      - name: Verify committed wasm matches sources
+        run: |
+          if ! git diff --exit-code -- apps/web/src/wasm/; then
+            echo "::error::apps/web/src/wasm/ is out of date. Run 'npm run build:wasm' in apps/web/ and commit the result."
+            exit 1
+          fi

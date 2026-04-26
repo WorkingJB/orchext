@@ -1,0 +1,21 @@
+{
+  "name": "orchext-crypto-wasm",
+  "type": "module",
+  "description": "wasm-bindgen surface for orchext-crypto; consumed by apps/web",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orchext-app/orchext"
+  },
+  "files": [
+    "orchext_crypto_wasm_bg.wasm",
+    "orchext_crypto_wasm.js",
+    "orchext_crypto_wasm.d.ts"
+  ],
+  "main": "orchext_crypto_wasm.js",
+  "types": "orchext_crypto_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
