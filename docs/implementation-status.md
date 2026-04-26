@@ -21,18 +21,18 @@ that limit, consolidate scope or break out a sub-phase.
 desktop frontends. wasm-pack 0.14 drives the browser crypto build.
 Workspace at repo root.
 
-**Test totals:** 183/183 passing with `DATABASE_URL` set; 151/151
+**Test totals:** 209/209 passing with `DATABASE_URL` set; 158/158
 without the DB-required suite (Rust only — `apps/web` has no JS test
-suite yet). +26 this round: 9 OAuth integration tests + 8 OAuth
-unit tests for the server-side PKCE flow shipped 2026-04-25, plus
-9 unit + integration tests in the new `orchext-oauth-client` crate
-shipped 2026-04-26 (verifier charset, S256 challenge round-trip,
-loopback accept loop driven by a fake browser task — happy path,
-state mismatch, access_denied, favicon-prefetch interleave, request
-parse). The `logout_revokes_session` integration test was also
-fixed to call the bearer-returning native signup endpoint after
-the auth hardening split signup into browser-cookie + native-bearer
-paths.
+suite yet). +52 across two rounds: the OAuth slice added 17 server
+tests + 9 client tests, and the MCP HTTP slice added 7 unit + 19
+integration tests covering lifecycle, every tool happy path, scope
+enforcement (out-of-scope + private floor + widening rejection),
+missing-doc indistinguishability, resources/{list,read} including
+the type-listing and YAML+markdown body shape, and auth failures
+(missing/invalid/revoked bearer + unknown-method JSON-RPC error).
+The `logout_revokes_session` integration test was also fixed to
+call the bearer-returning native signup endpoint after the auth
+hardening split signup into browser-cookie + native-bearer paths.
 
 **Scope shuffle 2026-04-25:** four scope changes folded in one pass.
 (1) **Graph view dropped.** Desktop's `GraphView.tsx` +
@@ -71,7 +71,7 @@ task aggregation + agent orchestration. Plan detail in
 | `orchext-index`  | ✅ shipped     | 4    | 6           | SQLite + FTS5; search / graph / filter |
 | `orchext-mcp`    | ✅ shipped     | 11   | 22          | JSON-RPC + stdio; rate limit + fs watcher |
 | `orchext-desktop`| ✅ 2a + 2b.2 + 2b.3 | 7 | —           | Multi-vault + remote connect + unlock/lock |
-| `orchext-server` | ✅ Phase 2b.3 | 20   | 20          | Auth + vault + index + tokens + audit + crypto |
+| `orchext-server` | ✅ 2b.3 + 2b.5 | 41 | 39          | Auth + vault + index + tokens + audit + crypto + OAuth + MCP HTTP |
 | `orchext-sync`   | ✅ 2b.2 + 2b.3 | 0   | —           | `RemoteVaultDriver` + crypto control calls |
 | `orchext-oauth-client` | ✅ 2b.5 | 9 | —           | PKCE agent helper + `orchext-oauth` CLI    |
 | `orchext-crypto` | ✅ 2b.3 + wasm32 | 13 | —           | Argon2id KDF + XChaCha20-Poly1305 AEAD; browser build clean |
@@ -105,8 +105,17 @@ favicon-prefetch handled), code exchange. **Desktop consent UI
 deferred** until installer slice (Phase 4) — needs a
 `tauri-plugin-deep-link` integration + per-OS `orchext://` scheme
 registration that's much cheaper to land alongside packaged builds.
-Subsequent 2b.5 slices: **MCP HTTP/SSE transport**
-*([Notion](https://www.notion.so/34b47fdae49a80cfaf2deabe4f71c339))*,
+**MCP HTTP transport — shipped 2026-04-26**
+*([Notion](https://www.notion.so/34b47fdae49a80cfaf2deabe4f71c339))*:
+`POST /v1/mcp` exposes the JSON-RPC surface (initialize, ping,
+tools/{list,call}, resources/{list,read}) authenticated against the
+`mcp_tokens` table — closing the loop with the OAuth flow above so
+agent-acquired bearers actually have somewhere to be used. Wire
+format reuses orchext-mcp's rpc envelope + error codes + tool
+definitions, so HTTP and stdio agents see byte-identical JSON.
+SSE (`GET /v1/mcp/events`) + `notifications/*` deferred until a
+real remote MCP client appears (every current MCP client uses
+stdio); `resources/subscribe` rides with that. Last 2b.5 slice:
 **`context.propose`** write-back flow
 *([Notion](https://www.notion.so/34b47fdae49a8090a361ca985f9ebd6c))*.
 Forward plan in [`phases/phase-2-plan.md`](phases/phase-2-plan.md).

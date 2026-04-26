@@ -263,8 +263,18 @@ Four slices, in order:
    to bundle with packaged builds; the web consent works for any
    agent on any OS in the meantime.
    *([Notion](https://www.notion.so/34b47fdae49a80f8bf91d7f85aa1590c))*
-3. **MCP transport** on `orchext-server`: JSON-RPC over HTTP + SSE
-   per `MCP.md` §2.2. Same tools, same error model.
+3. **MCP transport** on `orchext-server`: JSON-RPC over HTTP per
+   `MCP.md` §2.2. Same tools, same error model. **Shipped 2026-04-26.**
+   `POST /v1/mcp` exposes initialize, ping, tools/{list,call},
+   resources/{list,read}; bearer auth against the `mcp_tokens` table
+   (the same row OAuth issues), so agents acquired via slice 2 finally
+   have somewhere to call. Wire format reuses orchext-mcp's rpc
+   envelope + error codes + tool definitions — HTTP and stdio agents
+   see byte-identical JSON. SSE (`GET /v1/mcp/events`) +
+   `notifications/*` (incl. `resources/subscribe`) deferred until a
+   real remote MCP client appears; every current MCP client (Claude
+   Desktop, Cursor, etc.) uses stdio so the SSE-driven notification
+   surface has no audience today and lands when there's a driver.
    *([Notion](https://www.notion.so/34b47fdae49a80cfaf2deabe4f71c339))*
 4. **`context.propose`** lands on both surfaces. Desktop + web
    proposal review queue for admins (Phase 3 platform-ready).
