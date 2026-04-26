@@ -21,13 +21,18 @@ that limit, consolidate scope or break out a sub-phase.
 desktop frontends. wasm-pack 0.14 drives the browser crypto build.
 Workspace at repo root.
 
-**Test totals:** 174/174 passing with `DATABASE_URL` set; 142/142
+**Test totals:** 183/183 passing with `DATABASE_URL` set; 151/151
 without the DB-required suite (Rust only — `apps/web` has no JS test
-suite yet). +17 this round: 9 OAuth integration tests + 8 OAuth
-unit tests for the server-side PKCE flow shipped 2026-04-25. The
-`logout_revokes_session` integration test was also fixed to call the
-bearer-returning native signup endpoint after the auth hardening
-split signup into browser-cookie + native-bearer paths.
+suite yet). +26 this round: 9 OAuth integration tests + 8 OAuth
+unit tests for the server-side PKCE flow shipped 2026-04-25, plus
+9 unit + integration tests in the new `orchext-oauth-client` crate
+shipped 2026-04-26 (verifier charset, S256 challenge round-trip,
+loopback accept loop driven by a fake browser task — happy path,
+state mismatch, access_denied, favicon-prefetch interleave, request
+parse). The `logout_revokes_session` integration test was also
+fixed to call the bearer-returning native signup endpoint after
+the auth hardening split signup into browser-cookie + native-bearer
+paths.
 
 **Scope shuffle 2026-04-25:** four scope changes folded in one pass.
 (1) **Graph view dropped.** Desktop's `GraphView.tsx` +
@@ -68,9 +73,10 @@ task aggregation + agent orchestration. Plan detail in
 | `orchext-desktop`| ✅ 2a + 2b.2 + 2b.3 | 7 | —           | Multi-vault + remote connect + unlock/lock |
 | `orchext-server` | ✅ Phase 2b.3 | 20   | 20          | Auth + vault + index + tokens + audit + crypto |
 | `orchext-sync`   | ✅ 2b.2 + 2b.3 | 0   | —           | `RemoteVaultDriver` + crypto control calls |
+| `orchext-oauth-client` | ✅ 2b.5 | 9 | —           | PKCE agent helper + `orchext-oauth` CLI    |
 | `orchext-crypto` | ✅ 2b.3 + wasm32 | 13 | —           | Argon2id KDF + XChaCha20-Poly1305 AEAD; browser build clean |
 | `orchext-crypto-wasm` | ✅ 2b.4 | —  | —               | wasm-bindgen surface; 4 ops: generateSalt/ContentKey, wrap/unwrap |
-| `orchext-web`    | ✅ 2b.4 + 🚧 2b.5 | — | —           | Login + tenant picker + unlock + doc CRUD + tokens + audit; cookie/CSRF auth in flight |
+| `orchext-web`    | ✅ 2b.4 + 2b.5 | — | —            | Login + tenant picker + unlock + doc CRUD + tokens + audit + OAuth consent |
 
 **In flight:** Phase 2b.5 — auth hardening + agent surface. Web auth
 hardening **closed 2026-04-25** *([Notion](https://www.notion.so/34d47fdae49a81d4add7cfd2b7151ca8))*:
@@ -80,15 +86,29 @@ server emits an httpOnly `orchext_session` cookie alongside a readable
 cookie-authed requests must double-submit CSRF via `X-Orchext-CSRF`
 header. Web client dropped its `localStorage` token entirely and
 probes `/v1/auth/me` on load to classify session state.
-**OAuth 2.1 + PKCE — server surface shipped 2026-04-25**
-*([Notion](https://www.notion.so/34b47fdae49a80f8bf91d7f85aa1590c))*:
-`POST /v1/oauth/authorize` (session-authed) issues a single-use 10-min
-`oac_*` code under PKCE S256 + redirect URI validation; `POST /v1/oauth/token`
-exchanges `(code, verifier, redirect_uri)` for an audience-bound `ocx_*`
-bearer in `mcp_tokens`. Migration `0005_oauth.sql`. Desktop + web UI
-to drive the flow is the remaining work for the slice. Subsequent
-2b.5 slices: **MCP HTTP/SSE transport** *([Notion](https://www.notion.so/34b47fdae49a80cfaf2deabe4f71c339))*,
-**`context.propose`** write-back flow *([Notion](https://www.notion.so/34b47fdae49a8090a361ca985f9ebd6c))*.
+**OAuth 2.1 + PKCE — shipped 2026-04-26**
+*([Notion](https://www.notion.so/34b47fdae49a80f8bf91d7f85aa1590c))*. Three pieces:
+(1) **Server surface** — `POST /v1/oauth/authorize` (session-authed)
+issues a single-use 10-min `oac_*` code under PKCE S256 + redirect URI
+validation; `POST /v1/oauth/token` exchanges `(code, verifier, redirect_uri)`
+for an audience-bound `ocx_*` bearer in `mcp_tokens`. Migration
+`0005_oauth.sql`. (2) **Web consent UI** — `apps/web` route
+`/oauth/authorize` parses agent-supplied params from the URL,
+gates on session auth, resolves tenant membership, renders an
+approve/deny prompt with a private-scope warning, and 302s back to
+`redirect_uri?code=…&state=…` on approve (or `error=access_denied&…`
+on deny per RFC 6749 §4.1.2.1). (3) **Agent client** — new
+`crates/orchext-oauth-client` library + `orchext-oauth` CLI binary
+that runs the full flow: PKCE generation, `127.0.0.1:0` loopback
+listener, browser opener, callback parsing (state mismatch +
+favicon-prefetch handled), code exchange. **Desktop consent UI
+deferred** until installer slice (Phase 4) — needs a
+`tauri-plugin-deep-link` integration + per-OS `orchext://` scheme
+registration that's much cheaper to land alongside packaged builds.
+Subsequent 2b.5 slices: **MCP HTTP/SSE transport**
+*([Notion](https://www.notion.so/34b47fdae49a80cfaf2deabe4f71c339))*,
+**`context.propose`** write-back flow
+*([Notion](https://www.notion.so/34b47fdae49a8090a361ca985f9ebd6c))*.
 Forward plan in [`phases/phase-2-plan.md`](phases/phase-2-plan.md).
 
 **Just shipped:** Phase 2b.4 closed 2026-04-25. Web client gained

@@ -246,12 +246,22 @@ Four slices, in order:
    Authorization-code + PKCE, audience-bound bearer tokens, issued
    by the logged-in user via the desktop/web UI. Opaque token shape
    (still D15) — OAuth defines the *issuance* flow, not the token
-   encoding. **Server surface shipped 2026-04-25:**
-   `POST /v1/oauth/authorize` (session-authed, S256-only PKCE,
-   loopback-or-HTTPS redirect URIs, single-use 10-min codes),
-   `POST /v1/oauth/token` (PKCE verify, exact redirect-uri match,
-   `mcp_tokens` issuance). UI on desktop + web is the remaining
-   work for slice closure.
+   encoding. **Shipped 2026-04-26 in three parts:**
+   server surface (`POST /v1/oauth/authorize` session-authed,
+   S256-only PKCE, loopback-or-HTTPS redirect URIs, single-use 10-min
+   codes; `POST /v1/oauth/token` PKCE verify, exact redirect-uri
+   match, `mcp_tokens` issuance); web consent UI (`apps/web` route
+   `/oauth/authorize` parses agent-supplied params, gates on session
+   auth, renders approve/deny with private-scope warning, 302s to
+   `redirect_uri?code=…&state=…` on approve or
+   `error=access_denied&…` on deny per RFC 6749 §4.1.2.1); and the
+   agent client (`crates/orchext-oauth-client` library + `orchext-oauth`
+   CLI — PKCE generation, `127.0.0.1:0` loopback, browser opener,
+   callback parsing, code exchange). **Desktop consent UI deferred**
+   to land alongside the installer slice (Phase 4) — needs deep-link
+   plugin + per-OS `orchext://` registration that's much cheaper
+   to bundle with packaged builds; the web consent works for any
+   agent on any OS in the meantime.
    *([Notion](https://www.notion.so/34b47fdae49a80f8bf91d7f85aa1590c))*
 3. **MCP transport** on `orchext-server`: JSON-RPC over HTTP + SSE
    per `MCP.md` §2.2. Same tools, same error model.
