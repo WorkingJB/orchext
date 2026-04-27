@@ -90,6 +90,72 @@ export type Membership = {
   created_at: string;
 };
 
+// ---------- Organizations (Phase 3 platform Slice 1) ----------
+
+/// Returned by `GET /v1/orgs` — enriched view of org-tenant
+/// memberships joined with the `organizations` row.
+export type OrgMembership = {
+  org_id: string;
+  tenant_id: string;
+  name: string;
+  logo_url: string | null;
+  role: "owner" | "admin" | "org_editor" | "member";
+  joined_at: string;
+};
+
+/// Pending signup row visible to the requesting account on `GET /v1/orgs`.
+export type PendingSignup = {
+  id: string;
+  org_id: string;
+  org_name: string;
+  requested_role: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+};
+
+export type OrgsResponse = {
+  memberships: OrgMembership[];
+  pending: PendingSignup[];
+};
+
+export type Organization = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  logo_url: string | null;
+  allowed_domains: string[];
+  settings: Record<string, unknown>;
+  created_at: string;
+};
+
+export type MemberDetail = {
+  account_id: string;
+  email: string;
+  display_name: string;
+  role: "owner" | "admin" | "org_editor" | "member";
+  joined_at: string;
+};
+
+/// Admin pending-queue row (richer than `PendingSignup` — includes
+/// the requesting account's email + display_name).
+export type PendingDetail = {
+  id: string;
+  account_id: string;
+  email: string;
+  display_name: string;
+  requested_role: string;
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+  requested_at: string;
+};
+
+export type UpdateOrgInput = {
+  name?: string;
+  logo_url?: string | null;
+  allowed_domains?: string[];
+  settings?: Record<string, unknown>;
+};
+
 // ---------- Documents ----------
 
 export type ListEntry = {
@@ -263,6 +329,55 @@ export const api = {
 
   tenants: () =>
     request<{ memberships: Membership[] }>("GET", "/v1/tenants"),
+
+  // ---------- Orgs ----------
+  orgsList: () => request<OrgsResponse>("GET", "/v1/orgs"),
+  orgGet: (orgId: string) =>
+    request<Organization>("GET", `/v1/orgs/${encodeURIComponent(orgId)}`),
+  orgCreate: (name: string) =>
+    request<Organization>("POST", "/v1/orgs", { name }),
+  orgUpdate: (orgId: string, input: UpdateOrgInput) =>
+    request<Organization>(
+      "PATCH",
+      `/v1/orgs/${encodeURIComponent(orgId)}`,
+      input
+    ),
+  orgMembers: (orgId: string) =>
+    request<{ members: MemberDetail[] }>(
+      "GET",
+      `/v1/orgs/${encodeURIComponent(orgId)}/members`
+    ),
+  orgMemberUpdate: (orgId: string, accountId: string, role: string) =>
+    request<MemberDetail>(
+      "PATCH",
+      `/v1/orgs/${encodeURIComponent(orgId)}/members/${encodeURIComponent(accountId)}`,
+      { role }
+    ),
+  orgMemberRemove: (orgId: string, accountId: string) =>
+    request<void>(
+      "DELETE",
+      `/v1/orgs/${encodeURIComponent(orgId)}/members/${encodeURIComponent(accountId)}`
+    ),
+  orgPending: (
+    orgId: string,
+    status: "pending" | "approved" | "rejected" | "all" = "pending"
+  ) =>
+    request<{ pending: PendingDetail[] }>(
+      "GET",
+      `/v1/orgs/${encodeURIComponent(orgId)}/pending?status=${status}`
+    ),
+  orgPendingApprove: (orgId: string, accountId: string, role?: string) =>
+    request<MemberDetail>(
+      "POST",
+      `/v1/orgs/${encodeURIComponent(orgId)}/pending/${encodeURIComponent(accountId)}/approve`,
+      role ? { role } : {}
+    ),
+  orgPendingReject: (orgId: string, accountId: string) =>
+    request<void>(
+      "POST",
+      `/v1/orgs/${encodeURIComponent(orgId)}/pending/${encodeURIComponent(accountId)}/reject`,
+      {}
+    ),
 
   docList: (tenantId: string) =>
     request<{ entries: ListEntry[] }>(
