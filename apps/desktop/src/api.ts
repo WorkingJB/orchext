@@ -11,9 +11,15 @@ export type VaultInfo = {
 export type WorkspaceInfo = {
   id: string;
   name: string;
+  /// `"local"` | `"remote"`.
   kind: string;
   path: string;
   active: boolean;
+  /// Remote workspaces only. Frontend uses these to build the rail
+  /// and to call server-scoped endpoints (`/v1/orgs/*`).
+  server_url?: string;
+  tenant_id?: string;
+  account_email?: string;
 };
 
 export type DocListItem = {
@@ -134,10 +140,124 @@ export type OnboardingSeedDoc = {
   body: string;
 };
 
+// ---------- Remote connect ----------
+
+export type ConnectRemoteInput = {
+  server_url: string;
+  email: string;
+  password: string;
+  name?: string | null;
+  tenant_id?: string | null;
+};
+
+/// Mirrors the `ConnectRemoteOutcome` enum on the Rust side. The
+/// `kind` discriminator follows serde's `rename_all = "snake_case"`.
+export type ConnectRemoteOutcome =
+  | { kind: "connected"; workspace: VaultInfo }
+  | {
+      kind: "pending_approval";
+      account_email: string;
+      server_url: string;
+      pending: PendingSignup[];
+    };
+
+// ---------- Auth / accounts ----------
+
+export type AccountInfo = {
+  id: string;
+  email: string;
+  display_name: string;
+  created_at: string;
+};
+
+export type MeResponse = {
+  account: AccountInfo;
+  session_id: string;
+};
+
+// ---------- Organizations (Phase 3 platform Slice 1) ----------
+
+export type OrgMembership = {
+  org_id: string;
+  tenant_id: string;
+  name: string;
+  logo_url: string | null;
+  role: "owner" | "admin" | "org_editor" | "member";
+  joined_at: string;
+};
+
+export type PendingSignup = {
+  id: string;
+  org_id: string;
+  org_name: string;
+  requested_role: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+};
+
+export type OrgsListResponse = {
+  memberships: OrgMembership[];
+  pending: PendingSignup[];
+};
+
+export type Organization = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  logo_url: string | null;
+  /// Server returns this as a JSON value; in practice it's an array
+  /// of strings, but we keep `unknown` so a future shape change at
+  /// the server doesn't break the type.
+  allowed_domains: unknown;
+  settings: Record<string, unknown>;
+  created_at: string;
+};
+
+export type MemberDetail = {
+  account_id: string;
+  email: string;
+  display_name: string;
+  role: "owner" | "admin" | "org_editor" | "member";
+  joined_at: string;
+};
+
+export type PendingDetail = {
+  id: string;
+  account_id: string;
+  email: string;
+  display_name: string;
+  requested_role: string;
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+  requested_at: string;
+};
+
+export type UpdateOrgInput = {
+  name?: string;
+  logo_url?: string | null;
+  allowed_domains?: string[];
+  settings?: Record<string, unknown>;
+};
+
+export type Invitation = {
+  id: string;
+  org_id: string;
+  email: string;
+  role: "owner" | "admin" | "org_editor" | "member";
+  invited_by: string;
+  invited_at: string;
+  redeemed_at: string | null;
+  redeemed_by: string | null;
+};
+
+// ---------- API surface ----------
+
 export const api = {
   workspaceList: () => invoke<WorkspaceInfo[]>("workspace_list"),
   workspaceAdd: (path: string, name?: string | null) =>
     invoke<VaultInfo>("workspace_add", { path, name: name ?? null }),
+  workspaceConnectRemote: (input: ConnectRemoteInput) =>
+    invoke<ConnectRemoteOutcome>("workspace_connect_remote", { input }),
   workspaceActivate: (id: string) =>
     invoke<VaultInfo>("workspace_activate", { id }),
   workspaceRemove: (id: string) => invoke<void>("workspace_remove", { id }),
@@ -171,9 +291,129 @@ export const api = {
     invoke<number>("onboarding_save", { input: { docs } }),
   onVaultChanged: (cb: (evt: VaultChanged) => void): Promise<UnlistenFn> =>
     listen<VaultChanged>("vault://changed", (e) => cb(e.payload)),
+
+  // ---------- Auth (per remote workspace) ----------
+  authMe: (workspaceId: string) =>
+    invoke<MeResponse>("auth_me", { workspaceId }),
+  authLogout: (workspaceId: string) =>
+    invoke<void>("auth_logout", { workspaceId }),
+
+  // ---------- Orgs ----------
+  orgsList: (workspaceId: string) =>
+    invoke<OrgsListResponse>("orgs_list", { workspaceId }),
+  orgCreate: (workspaceId: string, name: string) =>
+    invoke<Organization>("org_create", {
+      workspaceId,
+      input: { name },
+    }),
+  orgGet: (workspaceId: string, orgId: string) =>
+    invoke<Organization>("org_get", { workspaceId, orgId }),
+  orgUpdate: (workspaceId: string, orgId: string, input: UpdateOrgInput) =>
+    invoke<Organization>("org_update", { workspaceId, orgId, input }),
+  orgMembers: (workspaceId: string, orgId: string) =>
+    invoke<{ members: MemberDetail[] }>("org_members", {
+      workspaceId,
+      orgId,
+    }),
+  orgMemberUpdate: (
+    workspaceId: string,
+    orgId: string,
+    accountId: string,
+    role: string
+  ) =>
+    invoke<MemberDetail>("org_member_update", {
+      workspaceId,
+      orgId,
+      accountId,
+      input: { role },
+    }),
+  orgMemberRemove: (
+    workspaceId: string,
+    orgId: string,
+    accountId: string
+  ) =>
+    invoke<void>("org_member_remove", {
+      workspaceId,
+      orgId,
+      accountId,
+    }),
+  orgPending: (
+    workspaceId: string,
+    orgId: string,
+    status: "pending" | "approved" | "rejected" | "all" = "pending"
+  ) =>
+    invoke<{ pending: PendingDetail[] }>("org_pending", {
+      workspaceId,
+      orgId,
+      status,
+    }),
+  orgPendingApprove: (
+    workspaceId: string,
+    orgId: string,
+    accountId: string,
+    role?: string
+  ) =>
+    invoke<MemberDetail>("org_pending_approve", {
+      workspaceId,
+      orgId,
+      accountId,
+      input: role ? { role } : null,
+    }),
+  orgPendingReject: (
+    workspaceId: string,
+    orgId: string,
+    accountId: string
+  ) =>
+    invoke<void>("org_pending_reject", {
+      workspaceId,
+      orgId,
+      accountId,
+    }),
+  orgInvitations: (
+    workspaceId: string,
+    orgId: string,
+    status: "open" | "redeemed" | "all" = "open"
+  ) =>
+    invoke<{ invitations: Invitation[] }>("org_invitations", {
+      workspaceId,
+      orgId,
+      status,
+    }),
+  orgInvite: (
+    workspaceId: string,
+    orgId: string,
+    email: string,
+    role?: string
+  ) =>
+    invoke<Invitation>("org_invite", {
+      workspaceId,
+      orgId,
+      input: role ? { email, role } : { email },
+    }),
+  orgInvitationDelete: (
+    workspaceId: string,
+    orgId: string,
+    invitationId: string
+  ) =>
+    invoke<void>("org_invitation_delete", {
+      workspaceId,
+      orgId,
+      invitationId,
+    }),
 };
 
+// ---------- Visibility constants (FORMAT v0.2) ----------
+
 export const VISIBILITIES = ["public", "work", "personal", "private"] as const;
+
+/// Visibility values offered when creating a doc in a personal vault.
+/// `org` is excluded — there's no org to share with.
+export const PERSONAL_VISIBILITIES = ["private", "personal", "work"] as const;
+
+/// Visibility values offered when creating a doc in an org workspace.
+/// `personal` and `work` are excluded — both collapse into "My notes
+/// for [Org]" via `private` (Phase 3 platform 4-layer model).
+export const ORG_VISIBILITIES = ["private", "org"] as const;
 
 export const SEED_TYPES = [
   "identity",
@@ -185,4 +425,8 @@ export const SEED_TYPES = [
   "preferences",
   "domains",
   "decisions",
+  // `org` is the seed type for org-shared business context (brand,
+  // mission, top-level goals). Visible to all members; writes gated
+  // by `org_editor`-or-higher (D17g).
+  "org",
 ] as const;
