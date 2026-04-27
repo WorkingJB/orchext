@@ -14,7 +14,7 @@ use orchext_crypto::{
     derive_master_key, make_key_check, unwrap_content_key, wrap_content_key, ContentKey, Salt,
     SealedBlob,
 };
-use orchext_sync::{list_tenants, login, LoginInput};
+use orchext_sync::{list_tenants, login, orgs as sync_orgs, LoginInput, PendingSignup};
 use orchext_vault::{Document, DocumentId, Frontmatter, Visibility};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -30,6 +30,21 @@ pub struct WorkspaceInfo {
     pub kind: String,
     pub path: String,
     pub active: bool,
+    /// Remote-only: the URL of the `orchext-server` this workspace is
+    /// backed by. The frontend uses this to group workspaces in the
+    /// rail and to call server-scoped endpoints (`/v1/orgs/*`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_url: Option<String>,
+    /// Remote-only: tenant id this workspace points at. Same row in
+    /// the registry; surfacing it lets the frontend cross-reference
+    /// `/v1/orgs/*.memberships[].tenant_id`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    /// Remote-only: email of the account this workspace's bearer
+    /// belongs to. Useful for the rail to label whose personal vault
+    /// is shown when the user has multiple accounts across servers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_email: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,6 +62,9 @@ fn entry_to_info(entry: &WorkspaceEntry, active: bool) -> WorkspaceInfo {
         kind: entry.kind.clone(),
         path: entry.path.to_string_lossy().to_string(),
         active,
+        server_url: entry.server_url.clone(),
+        tenant_id: entry.tenant_id.map(|id| id.to_string()),
+        account_email: entry.account_email.clone(),
     }
 }
 
@@ -128,26 +146,46 @@ pub struct ConnectRemoteInput {
     pub tenant_id: Option<uuid::Uuid>,
 }
 
-/// Log into a remote `orchext-server`, register **every** tenant the
-/// account belongs to (personal vault + each org membership), and
-/// activate one. Persists the returned session token in the local
-/// registry so subsequent activations don't prompt.
+/// Outcome shape: either we connected (workspaces registered, one
+/// activated) or the account is awaiting an admin's approval and the
+/// frontend should render `AwaitingApprovalView` instead of falling
+/// through to a workspace.
 ///
-/// Phase 3 platform Slice 1 changed this from "register the personal
-/// tenant only" to "register all memberships" so the WorkspaceSwitcher
-/// surfaces orgs alongside personal — the desktop's equivalent of the
-/// web client's left rail.
+/// Mirrors the web client's gate (D17d): an account that has no org
+/// memberships but does have a pending_signups row stays on the
+/// awaiting-approval screen even though its personal vault technically
+/// exists. "Connecting to the server" is treated as "connecting to the
+/// org"; surfacing the personal vault here would invite the user to
+/// invest in a context they're about to leave.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ConnectRemoteOutcome {
+    Connected { workspace: VaultInfo },
+    PendingApproval {
+        account_email: String,
+        server_url: String,
+        pending: Vec<PendingSignup>,
+    },
+}
+
+/// Log into a remote `orchext-server`. Two outcomes:
 ///
-/// Activation order: explicit `tenant_id` if passed; else the personal
-/// tenant; else the first tenant. Surfaces "awaiting approval" if the
-/// account has zero memberships (D17d — pending row exists, but no
-/// admin has approved yet).
+/// - **Connected:** registers every tenant the account belongs to
+///   (personal vault + each org membership) and activates one.
+///   Persists the returned session token in the registry so
+///   subsequent activations don't prompt.
+/// - **PendingApproval:** account has no org memberships yet but has
+///   a pending_signups row. No workspace registered; frontend shows
+///   the awaiting-approval gate (D17d).
+///
+/// Activation order on the connected path: explicit `tenant_id` if
+/// passed; else the personal tenant; else the first tenant.
 #[tauri::command]
 pub async fn workspace_connect_remote(
     state: State<'_, AppState>,
     app: AppHandle,
     input: ConnectRemoteInput,
-) -> Result<VaultInfo, String> {
+) -> Result<ConnectRemoteOutcome, String> {
     let server_url: url::Url = input
         .server_url
         .parse()
@@ -165,14 +203,33 @@ pub async fn workspace_connect_remote(
     .await
     .map_err(|e| format!("login: {e}"))?;
 
-    // 2. list memberships
-    let tenants = list_tenants(&server_url, &outcome.session.secret)
-        .await
-        .map_err(|e| format!("list tenants: {e}"))?;
+    // 2. list memberships (personal vault + each org tenant) and the
+    //    org-level state (memberships + pending_signups). Both run in
+    //    parallel against the just-issued session token.
+    let (tenants_res, orgs_res) = tokio::join!(
+        list_tenants(&server_url, &outcome.session.secret),
+        sync_orgs::orgs_list(&server_url, &outcome.session.secret),
+    );
+    let tenants = tenants_res.map_err(|e| format!("list tenants: {e}"))?;
+    let orgs = orgs_res.map_err(|e| format!("list orgs: {e}"))?;
+
+    // 2a. Awaiting-approval gate (D17d). If the account has no org
+    //     memberships but has a pending row, short-circuit before
+    //     touching the registry.
+    if orgs.memberships.is_empty() && !orgs.pending.is_empty() {
+        return Ok(ConnectRemoteOutcome::PendingApproval {
+            account_email: outcome.account.email.clone(),
+            server_url: server_url.to_string(),
+            pending: orgs.pending,
+        });
+    }
+
     if tenants.is_empty() {
+        // Defensive: every account gets a personal tenant at signup,
+        // so an empty list here means the server is in an unexpected
+        // state (e.g. tenant deletion outside the supported flow).
         return Err(format!(
-            "Awaiting approval — your sign-up to {} is pending review by an admin. \
-             Use the web app to check status, or contact your admin.",
+            "no workspaces available on {} for this account",
             server_url.host_str().unwrap_or("the server")
         ));
     }
@@ -257,7 +314,8 @@ pub async fn workspace_connect_remote(
         .mutate_registry(|reg| reg.set_active(&id))
         .await?;
 
-    activate_inner(&state, &app, &id).await
+    let workspace = activate_inner(&state, &app, &id).await?;
+    Ok(ConnectRemoteOutcome::Connected { workspace })
 }
 
 fn dirs_home() -> PathBuf {
