@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { api, ApiFailure, CryptoState, Membership, OrgsResponse } from "./api";
+import {
+  api,
+  ApiFailure,
+  CryptoState,
+  Membership,
+  OrgsResponse,
+  PendingSignup,
+} from "./api";
 import { SessionProfile } from "./session";
 import { LoginView } from "./LoginView";
 import { DocumentsView } from "./DocumentsView";
@@ -10,6 +17,7 @@ import { UnlockView } from "./UnlockView";
 import { ConsentView } from "./ConsentView";
 import { Heartbeat, startHeartbeat } from "./heartbeat";
 import { buildContexts, Context, OrgRail } from "./OrgRail";
+import { AwaitingApprovalView } from "./AwaitingApprovalView";
 
 type View = "documents" | "proposals" | "tokens" | "audit";
 
@@ -37,7 +45,7 @@ type WorkspaceState =
 // covers that branch in a follow-up commit).
 type ContextsState =
   | { kind: "loading" }
-  | { kind: "ready"; contexts: Context[]; pendingCount: number };
+  | { kind: "ready"; contexts: Context[]; pending: PendingSignup[] };
 
 // OAuth consent surface lives at its own path. We detect it once at
 // mount and short-circuit the normal app shell so the user lands on
@@ -98,7 +106,7 @@ function MainApp() {
         setContexts({
           kind: "ready",
           contexts: ctxs,
-          pendingCount: o.pending.length,
+          pending: o.pending,
         });
         // Default-select first context (personal first by buildContexts
         // ordering) once on first load.
@@ -106,7 +114,7 @@ function MainApp() {
       })
       .catch(() => {
         if (!cancelled) {
-          setContexts({ kind: "ready", contexts: [], pendingCount: 0 });
+          setContexts({ kind: "ready", contexts: [], pending: [] });
         }
       });
     return () => {
@@ -210,13 +218,33 @@ function MainApp() {
       </div>
     );
   }
-  // Awaiting-approval gate (no contexts) is a follow-up commit; for
-  // now this branch shows a placeholder so accounts in that state
-  // don't crash the app.
-  if (contexts.contexts.length === 0 || !active) {
+  // Awaiting-approval gate (D17d): account has no org membership +
+  // a pending row. Personal vault is intentionally not surfaced —
+  // "connecting to the server" implies "connecting to the org" until
+  // an admin approves.
+  const orgContexts = contexts.contexts.filter((c) => c.kind === "org");
+  if (orgContexts.length === 0 && contexts.pending.length > 0) {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
-        No workspaces yet.
+      <AwaitingApprovalView
+        pending={contexts.pending}
+        email={auth.profile.email}
+        onSignOut={logout}
+      />
+    );
+  }
+  if (contexts.contexts.length === 0 || !active) {
+    // Edge state: no orgs, no pending. Most likely a self-hosted
+    // server that has no first-user yet, or an admin-removed account
+    // with no re-application — log out so the user can re-sign-up.
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-neutral-500 gap-3">
+        <span>No workspaces available.</span>
+        <button
+          onClick={logout}
+          className="text-sm text-neutral-500 hover:text-neutral-900 underline"
+        >
+          Sign out
+        </button>
       </div>
     );
   }
