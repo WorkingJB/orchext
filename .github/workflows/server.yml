@@ -59,7 +59,13 @@ jobs:
         # pre-existing test-helper warnings we don't want to fail
         # CI on while the broader cleanup is pending. Treat clippy
         # output as advisory until the warning floor is zero.
-        run: cargo clippy --workspace --all-targets
+        #
+        # `--exclude orchext-desktop`: the Tauri desktop crate pulls
+        # in `gdk-sys` on Linux, which needs `libgtk-3-dev` +
+        # `libwebkit2gtk-4.1-dev` system packages. Server CI is
+        # scoped to the server-side crates; desktop has its own
+        # Phase 4 build pipeline.
+        run: cargo clippy --workspace --exclude orchext-desktop --all-targets
 
       - name: cargo test
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --exclude orchext-desktop --all-targets

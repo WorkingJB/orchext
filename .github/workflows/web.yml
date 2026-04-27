@@ -43,9 +43,13 @@ jobs:
       - name: Install wasm-pack
         # `predev`/`prebuild` in apps/web/package.json invoke
         # wasm-pack — must be on PATH before `npm run build`.
+        # Pinned to 0.14.0 to match the local toolchain that
+        # generated the committed `apps/web/src/wasm/` artefacts;
+        # newer wasm-pack emits subtly different bindings and the
+        # "Verify committed wasm" step then trips on the diff.
         uses: jetli/wasm-pack-action@v0.4.0
         with:
-          version: latest
+          version: '0.14.0'
 
       - name: Setup Node
         uses: actions/setup-node@v4
