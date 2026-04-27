@@ -8,6 +8,9 @@ pub enum Visibility {
     Work,
     Personal,
     Private,
+    /// Visible to all members of the organization the document
+    /// belongs to. FORMAT v0.2; Phase 3 platform Slice 1.
+    Org,
     Custom(String),
 }
 
@@ -18,6 +21,7 @@ impl Visibility {
             "work" => Ok(Self::Work),
             "personal" => Ok(Self::Personal),
             "private" => Ok(Self::Private),
+            "org" => Ok(Self::Org),
             other => {
                 if Self::is_valid_label(other) {
                     Ok(Self::Custom(other.to_string()))
@@ -34,12 +38,20 @@ impl Visibility {
             Self::Work => "work",
             Self::Personal => "personal",
             Self::Private => "private",
+            Self::Org => "org",
             Self::Custom(s) => s,
         }
     }
 
     pub fn is_private(&self) -> bool {
         matches!(self, Self::Private)
+    }
+
+    /// True for the built-in `org` visibility (FORMAT §11.3). Like
+    /// `private`, this is a hard label — scope must contain the
+    /// literal `org` to surface a doc tagged with it.
+    pub fn is_org(&self) -> bool {
+        matches!(self, Self::Org)
     }
 
     fn is_valid_label(s: &str) -> bool {
@@ -89,6 +101,18 @@ mod tests {
         assert!(matches!(Visibility::from_label("work").unwrap(), Visibility::Work));
         assert!(matches!(Visibility::from_label("personal").unwrap(), Visibility::Personal));
         assert!(matches!(Visibility::from_label("private").unwrap(), Visibility::Private));
+        assert!(matches!(Visibility::from_label("org").unwrap(), Visibility::Org));
+    }
+
+    #[test]
+    fn org_round_trips() {
+        let v = Visibility::from_label("org").unwrap();
+        assert_eq!(v.as_label(), "org");
+        assert!(v.is_org());
+        assert!(!v.is_private());
+        // Custom("org") would also have `as_label() == "org"`, but
+        // the dedicated variant is what `from_label` returns.
+        assert!(matches!(v, Visibility::Org));
     }
 
     #[test]

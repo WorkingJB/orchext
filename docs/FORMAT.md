@@ -346,35 +346,38 @@ state. A vault root never references the registry. A vault remains
 portable: drop it onto another machine, register it as a new
 workspace, and it opens without edits.
 
-### 11.2 Team seed type `org/` (Phase 2c)
+### 11.2 Org seed type `org/` (Phase 3 platform Slice 1)
 
-Team workspaces add a new seed type `org/` for business context
-(goals, marketing stance, tone, policies) shared across members.
-Frontmatter semantics are unchanged; `type: org` is what the indexer
-and UI key on.
+Org-bound workspaces add a new seed type `org/` for business context
+(brand, mission, top-level goals, marketing stance, tone, policies)
+shared across members of the organization. Frontmatter semantics are
+unchanged; `type: org` is what the indexer and UI key on.
 
 `org/` earns a spec bump to v0.2 when it ships. Older readers opening
 a v0.2 vault treat `org/` as a custom type — they see the documents,
-just without the team-aware UI hints.
+just without the org-aware UI hints.
 
-### 11.3 Built-in visibility `org` (Phase 2c)
+### 11.3 Built-in visibility `org` (Phase 3 platform Slice 1)
 
 A new built-in visibility label `org` is added for documents visible
-to all members of a team workspace, regardless of role.
+to all members of an org-bound workspace, regardless of role.
 
 - Like `private`, `org` is a **hard label**: scope must contain the
   literal string `org` to surface any `org`-labelled document. No
   implicit promotion.
-- Unlike `private`, `org` is meaningful only inside a team workspace;
-  in a personal vault it behaves as a plain user-defined label.
-- Admin-only write (Phase 2c decision D10).
+- Unlike `private`, `org` is meaningful only inside an org-bound
+  workspace; in a personal vault it behaves as a plain user-defined
+  label.
+- Write gated by `org_editor`-or-higher (Phase 3 decision D17g);
+  rolled in alongside the per-doc-type-of-`org` server-side check
+  in `documents.rs`.
 
-### 11.4 `principal` field in team workspaces
+### 11.4 `principal` field in org-bound workspaces
 
 The reserved `principal` field (§3.2) starts carrying meaningful
-values in team workspaces: the ID of the account (member) or team
-that owns the document. The field already round-trips today; Phase 2c
-just starts populating it.
+values in org-bound workspaces: the ID of the account (member) or
+team that owns the document. The field already round-trips today;
+Phase 3 platform just starts populating it.
 
 No format change is required for 11.1 or 11.4. 11.2 and 11.3 are the
 v0.2 delta.
