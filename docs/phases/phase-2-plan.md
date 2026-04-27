@@ -64,18 +64,30 @@ the server falls back to opaque blobs and hosted integrations see a
 locked state. Strict-E2EE opt-out available; those users' hosted
 agents fall back to relay-to-device.
 
-**D10. Org context — admin-write, first user is admin.**
-Team workspaces get a seed `org/` top-level type. Only admins/owners
-can write to `org/*`. The first user of a new team is made admin
-automatically. Members read `org/*` subject to visibility. Members
-with `read+propose` can submit `context.propose` patches for admin
-review — the long-deferred propose flow finally earns its keep.
+**D10 / D11 — superseded 2026-04-27.** The Phase 2-era framing
+(team == tenant, three-role model with no `org_editor`, no approval
+queue) was reshaped during the 2026-04-27 architecture review.
+Implementation should follow the revised D10 / D11 + new D17c–D17g
+in [`phase-3-platform.md`](phase-3-platform.md), which introduce
+Organization-above-tenant (1:1 v1), org-level + team-level role
+split, logical team scoping, approval-queue gates, deferred
+domain auto-join, and multi-org per account.
 
-**D11. Team roles — three levels, mapped to scope.**
-`owner` (billing + member management + org write), `admin` (member
-management + org write), `member` (read + propose). Roles translate
-to default scope sets; per-workspace tokens may narrow further.
-No per-document ACLs.
+The original text is preserved below for historical reference;
+do not implement off it.
+
+> **D10. Org context — admin-write, first user is admin.**
+> Team workspaces get a seed `org/` top-level type. Only admins/owners
+> can write to `org/*`. The first user of a new team is made admin
+> automatically. Members read `org/*` subject to visibility. Members
+> with `read+propose` can submit `context.propose` patches for admin
+> review — the long-deferred propose flow finally earns its keep.
+>
+> **D11. Team roles — three levels, mapped to scope.**
+> `owner` (billing + member management + org write), `admin` (member
+> management + org write), `member` (read + propose). Roles translate
+> to default scope sets; per-workspace tokens may narrow further.
+> No per-document ACLs.
 
 **D12. No CRDTs.** Server is source of truth in sync mode. Writes are
 version-checked against document hash (already computed by
@@ -310,9 +322,13 @@ Originally scoped to land before Phase 3a. Folded into
 [`phase-3-platform.md`](phase-3-platform.md) along with the web
 onboarding chat and OS keychain follow-ups, because none of these
 items block 2b.5 and bundling them keeps the rebrand sweep clean.
-Decisions D10 and D11 carry over verbatim. Same scope, same crates
-(`orchext-server`, `orchext-vault`, `orchext-auth`, `apps/desktop`,
-`apps/web`); same cuts (no billing, no SCIM/SAML, no per-doc ACLs).
+Decisions D10 and D11 were reshaped during the 2026-04-27
+architecture review — see [`phase-3-platform.md`](phase-3-platform.md)
+for the revised versions and the new D17c–D17g. Crates touched
+are unchanged (`orchext-server`, `orchext-vault`, `orchext-auth`,
+`apps/desktop`, `apps/web`); cuts are extended (no SMTP at launch,
+no cryptographic per-team separation, no granular permissions
+matrix beyond `org_editor`).
 
 ## New crates / apps summary
 

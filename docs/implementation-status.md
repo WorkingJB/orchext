@@ -228,13 +228,15 @@ _(none — Phase 2b.5 closed 2026-04-27 with `context.propose`.)_
   decisions D7–D17, remaining 2b.5 slices, scope cuts, open
   questions.
 - [`phases/phase-3-platform.md`](phases/phase-3-platform.md) —
-  Teams + invites (formerly Phase 2c), web onboarding chat, OS
-  keychain. Bundles the work pushed out of 2b.4 and 2b.5 narrowing.
-  *(Notion: [teams](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) ·
-  [org/ seed type](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07) ·
-  [team UI](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33) ·
-  [onboarding chat](https://www.notion.so/34d47fdae49a81d6a012e90cbbcb0d0b) ·
-  [OS keychain](https://www.notion.so/34d47fdae49a819c8ce9dd6511989596))*
+  Orgs + teams (recast from "team workspaces" on 2026-04-27 — see
+  revised D10 / D11 + new D17c–D17g), web onboarding chat, OS
+  keychain. Sliced into Slice 1 (Org foundation) → Slice 2 (Teams)
+  → Slice 3 (Web onboarding chat) → Slice 4 (OS keychain).
+  *(Notion: [Slice 1 Org foundation](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) ·
+  [`org/` seed type sub-item](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07) ·
+  [Slice 2 Teams](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33) ·
+  [Slice 3 onboarding chat](https://www.notion.so/34d47fdae49a81d6a012e90cbbcb0d0b) ·
+  [Slice 4 OS keychain](https://www.notion.so/34d47fdae49a819c8ce9dd6511989596))*
 - [`phases/phase-3a-rebrand-tasks.md`](phases/phase-3a-rebrand-tasks.md) —
   Rebrand `orchext` → `orchext` + vault-native `type: task` and
   `type: skill` seed types (FORMAT v0.2). Kicks off after Phase 3
