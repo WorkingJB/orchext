@@ -3,7 +3,15 @@ import { api, Proposal } from "./api";
 
 type FilterStatus = "pending" | "approved" | "rejected" | "all";
 
-export function ProposalsView({ onMutated }: { onMutated?: () => void }) {
+export function ProposalsView({
+  onMutated,
+  focusDocId,
+}: {
+  onMutated?: () => void;
+  /// Optional doc-id filter set by the inline "Review →" banner on a
+  /// doc detail. When non-null, hides proposals targeting other docs.
+  focusDocId?: string | null;
+}) {
   const [filter, setFilter] = useState<FilterStatus>("pending");
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +31,10 @@ export function ProposalsView({ onMutated }: { onMutated?: () => void }) {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  const filtered = focusDocId
+    ? proposals?.filter((p) => p.doc_id === focusDocId) ?? null
+    : proposals;
 
   async function approve(p: Proposal) {
     setBusy(p.id);
@@ -70,16 +82,18 @@ export function ProposalsView({ onMutated }: { onMutated?: () => void }) {
         </div>
       )}
 
-      {proposals && proposals.length === 0 && (
+      {filtered && filtered.length === 0 && (
         <div className="bg-white border border-neutral-200 rounded-lg p-8 text-center text-neutral-500 text-sm">
-          {filter === "pending"
+          {focusDocId
+            ? `No ${filter === "pending" ? "pending" : filter} proposals for this document.`
+            : filter === "pending"
             ? "No proposals waiting for review. Agents holding a `read+propose` token can submit changes here."
             : `No ${filter} proposals.`}
         </div>
       )}
 
       <div className="space-y-3">
-        {proposals?.map((p) => (
+        {filtered?.map((p) => (
           <ProposalCard
             key={p.id}
             proposal={p}

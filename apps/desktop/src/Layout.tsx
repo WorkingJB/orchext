@@ -1,146 +1,143 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, VaultInfo } from "./api";
-import { DocumentsView } from "./DocumentsView";
+import { Context, OrgRail } from "./OrgRail";
 import { OnboardingView } from "./OnboardingView";
-import { TokensView } from "./TokensView";
-import { AuditView } from "./AuditView";
-import { ProposalsView } from "./ProposalsView";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { DocumentsTab } from "./DocumentsTab";
+import { SettingsView } from "./SettingsView";
 
-type View = "documents" | "onboarding" | "proposals" | "tokens" | "audit";
-
-type Counts = {
-  documents: number;
-  proposals: number;
-  tokens: number;
-  audit: number;
-};
+type View = "documents" | "settings" | "onboarding";
 
 export function Layout({
-  vault,
+  activeVault,
+  contexts,
   onSwitched,
+  onAdd,
+  onRefresh,
 }: {
-  vault: VaultInfo;
+  activeVault: VaultInfo;
+  contexts: Context[];
   onSwitched: (v: VaultInfo) => void;
+  onAdd: () => void;
+  onRefresh: () => Promise<void>;
 }) {
+  const activeCtx = useMemo<Context | null>(() => {
+    return (
+      contexts.find((c) => c.workspaceId === activeVault.workspace_id) ?? null
+    );
+  }, [contexts, activeVault.workspace_id]);
+
   // Auto-open onboarding on first-run (empty vault).
   const [view, setView] = useState<View>(
-    vault.document_count === 0 ? "onboarding" : "documents"
+    activeVault.document_count === 0 ? "onboarding" : "documents"
   );
-  const [counts, setCounts] = useState<Counts>({
-    documents: vault.document_count,
-    proposals: 0,
-    tokens: 0,
-    audit: 0,
-  });
+  /// Optional doc-id filter for the Proposals sub-tab. Set when the
+  /// inline banner on a doc detail asks "Review proposals" so the
+  /// user lands directly on that doc's pending proposals; cleared on
+  /// context switch or sub-tab navigation.
+  const [proposalsFocus, setProposalsFocus] = useState<string | null>(null);
 
-  const refreshCounts = useCallback(async () => {
-    const [docs, proposals, tokens, audit] = await Promise.all([
-      api.docList().then((l) => l.length),
-      api
-        .proposalList("pending")
-        .then((l) => l.length)
-        .catch(() => 0),
-      api
-        .tokenList()
-        .then((l) => l.length)
-        .catch(() => 0),
-      api
-        .auditList(1)
-        .then((p) => p.total)
-        .catch(() => 0),
-    ]);
-    setCounts({ documents: docs, proposals, tokens, audit });
-  }, []);
-
+  // When the workspace switches, reset the visible view. Onboarding
+  // auto-opens only on truly empty vaults.
   useEffect(() => {
-    // Refresh counts whenever the view changes or on mount — cheap, and
-    // keeps the sidebar honest after edits in any tab.
-    void refreshCounts();
-  }, [view, refreshCounts]);
+    setView(activeVault.document_count === 0 ? "onboarding" : "documents");
+    setProposalsFocus(null);
+  }, [activeVault.workspace_id, activeVault.document_count]);
 
-  // When the workspace switches, hop to Documents and refresh counts
-  // against the newly-active vault.
-  useEffect(() => {
-    setView(vault.document_count === 0 ? "onboarding" : "documents");
-    setCounts({
-      documents: vault.document_count,
-      proposals: 0,
-      tokens: 0,
-      audit: 0,
-    });
-    void refreshCounts();
-  }, [vault.workspace_id, vault.document_count, refreshCounts]);
+  const switchToWorkspace = useCallback(
+    async (workspaceId: string) => {
+      if (workspaceId === activeVault.workspace_id) return;
+      try {
+        const info = await api.workspaceActivate(workspaceId);
+        onSwitched(info);
+      } catch (e) {
+        console.warn("activate failed", e);
+      }
+    },
+    [activeVault.workspace_id, onSwitched]
+  );
+
+  const onboardingActive = view === "onboarding";
 
   return (
     <div className="h-full flex flex-col">
       <header className="border-b border-neutral-200 bg-white px-4 h-12 flex items-center gap-3">
         <span className="font-semibold">Orchext</span>
         <span className="text-neutral-400">·</span>
-        <WorkspaceSwitcher active={vault} onSwitched={onSwitched} />
+        <span className="text-sm text-neutral-700">
+          {activeCtx ? badgeLabel(activeCtx) : activeVault.name}
+        </span>
+        <span className="ml-auto text-xs text-neutral-500 font-mono truncate max-w-[40ch]">
+          {activeVault.root}
+        </span>
       </header>
       <div className="flex flex-1 min-h-0">
-        <nav className="w-44 border-r border-neutral-200 bg-white p-2 flex flex-col gap-1">
-          <NavBtn
-            label="Documents"
-            count={counts.documents}
-            active={view === "documents"}
-            onClick={() => setView("documents")}
-          />
-          <NavBtn
-            label="Onboarding"
-            count={0}
-            active={view === "onboarding"}
-            onClick={() => setView("onboarding")}
-          />
-          <NavBtn
-            label="Proposals"
-            count={counts.proposals}
-            active={view === "proposals"}
-            onClick={() => setView("proposals")}
-          />
-          <NavBtn
-            label="Tokens"
-            count={counts.tokens}
-            active={view === "tokens"}
-            onClick={() => setView("tokens")}
-          />
-          <NavBtn
-            label="Audit"
-            count={counts.audit}
-            active={view === "audit"}
-            onClick={() => setView("audit")}
-          />
-        </nav>
-        <main key={vault.workspace_id} className="flex-1 min-w-0 bg-neutral-50">
-          {view === "documents" && (
-            <DocumentsView onMutated={refreshCounts} />
-          )}
+        <OrgRail
+          contexts={contexts}
+          activeWorkspaceId={activeVault.workspace_id}
+          onSelect={(ctx) => void switchToWorkspace(ctx.workspaceId)}
+          onAdd={onAdd}
+        />
+        {!onboardingActive && (
+          <nav className="w-44 border-r border-neutral-200 bg-white p-2 flex flex-col gap-1">
+            <NavBtn
+              label="Documents"
+              active={view === "documents"}
+              onClick={() => setView("documents")}
+            />
+            <NavBtn
+              label="Settings"
+              active={view === "settings"}
+              onClick={() => setView("settings")}
+            />
+          </nav>
+        )}
+        <main key={activeVault.workspace_id} className="flex-1 min-w-0 bg-neutral-50">
           {view === "onboarding" && (
             <OnboardingView
               onComplete={async () => {
-                await refreshCounts();
+                await onRefresh();
                 setView("documents");
               }}
             />
           )}
-          {view === "proposals" && <ProposalsView onMutated={refreshCounts} />}
-          {view === "tokens" && <TokensView onMutated={refreshCounts} />}
-          {view === "audit" && <AuditView />}
+          {view === "documents" && activeCtx && (
+            <DocumentsTab
+              ctx={activeCtx}
+              proposalsFocus={proposalsFocus}
+              onSetProposalsFocus={setProposalsFocus}
+              onMutated={onRefresh}
+            />
+          )}
+          {view === "settings" && activeCtx && (
+            <SettingsView
+              ctx={activeCtx}
+              onMutated={onRefresh}
+              onOrgUpdated={() => void onRefresh()}
+            />
+          )}
         </main>
       </div>
     </div>
   );
 }
 
+function badgeLabel(ctx: Context): string {
+  switch (ctx.kind) {
+    case "local":
+      return ctx.name;
+    case "personal":
+      return "Personal";
+    case "org":
+      return ctx.name;
+  }
+}
+
 function NavBtn({
   label,
-  count,
   active,
   onClick,
 }: {
   label: string;
-  count: number;
   active: boolean;
   onClick: () => void;
 }) {
@@ -148,21 +145,13 @@ function NavBtn({
     <button
       onClick={onClick}
       className={
-        "flex items-center justify-between text-left px-3 py-2 rounded-md text-sm transition " +
+        "text-left px-3 py-2 rounded-md text-sm transition " +
         (active
           ? "bg-brand-50 text-brand-700 font-medium"
           : "text-neutral-700 hover:bg-neutral-100")
       }
     >
-      <span>{label}</span>
-      <span
-        className={
-          "text-xs px-1.5 py-0.5 rounded " +
-          (active ? "bg-white text-brand-700" : "bg-neutral-100 text-neutral-600")
-        }
-      >
-        {count}
-      </span>
+      {label}
     </button>
   );
 }

@@ -3,21 +3,54 @@ import {
   api,
   DocDetail,
   DocListItem,
+  ORG_VISIBILITIES,
+  PERSONAL_VISIBILITIES,
+  Proposal,
   SEED_TYPES,
-  VISIBILITIES,
 } from "./api";
+import { Context } from "./OrgRail";
+import { RichTextEditor } from "./RichTextEditor";
+
+/// Section toggle in the org-context Documents pane (mirrors web):
+///   "mine" → visibility=private docs (My notes for [Org])
+///   "org"  → visibility=org docs (the org's shared context)
+///   "all"  → both, default
+type Section = "all" | "mine" | "org";
 
 export function DocumentsView({
+  ctx,
   onMutated,
+  onSwitchToProposals,
 }: {
+  ctx: Context;
   onMutated?: () => void | Promise<void>;
+  onSwitchToProposals?: (docId: string) => void;
 }) {
+  const isOrg = ctx.kind === "org";
   const [items, setItems] = useState<DocListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [section, setSection] = useState<Section>("all");
   const [detail, setDetail] = useState<DocDetail | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /// Pending-proposal count keyed by doc_id for the inline banner.
+  /// Refreshed alongside the doc list so approvals from a Proposals
+  /// session reflect immediately on return.
+  const [pendingByDoc, setPendingByDoc] = useState<Record<string, number>>({});
+
+  async function refreshProposalCounts() {
+    try {
+      const list: Proposal[] = await api.proposalList("pending");
+      const counts: Record<string, number> = {};
+      for (const p of list) {
+        counts[p.doc_id] = (counts[p.doc_id] ?? 0) + 1;
+      }
+      setPendingByDoc(counts);
+    } catch {
+      // Best-effort; don't fail the docs view on a proposals fetch error.
+    }
+  }
 
   async function refreshList() {
     try {
@@ -27,14 +60,23 @@ export function DocumentsView({
     } catch (e) {
       setError(String(e));
     }
+    void refreshProposalCounts();
   }
 
   useEffect(() => {
+    setItems([]);
+    setSelectedId(null);
+    setDetail(null);
+    setCreating(false);
+    setSection("all");
+    setTypeFilter(null);
     void refreshList();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.workspaceId]);
 
-  // Refresh the list whenever the watcher sees a change under the vault
-  // root (edits from another editor, `git pull`, agent writes, etc.).
+  // Refresh the list whenever the watcher (local vault) sees a change
+  // under the vault root. Remote workspaces still get explicit refresh
+  // on mutations + a fresh fetch on context switch.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     api
@@ -47,6 +89,7 @@ export function DocumentsView({
     return () => {
       unlisten?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -60,75 +103,111 @@ export function DocumentsView({
       .catch((e) => setError(String(e)));
   }, [selectedId]);
 
-  const types = useMemo(() => {
-    const present = new Set<string>(items.map((i) => i.type));
-    for (const t of SEED_TYPES) {
-      present.add(t);
-    }
-    return Array.from(present).sort();
-  }, [items]);
+  // Section pre-filter applies before type filter so the type counts
+  // reflect only docs in the active section.
+  const sectionItems = useMemo(() => {
+    if (!isOrg || section === "all") return items;
+    if (section === "mine") return items.filter((i) => i.visibility === "private");
+    if (section === "org") return items.filter((i) => i.visibility === "org");
+    return items;
+  }, [items, isOrg, section]);
 
-  const visible = typeFilter ? items.filter((i) => i.type === typeFilter) : items;
+  const types = useMemo(() => {
+    const present = new Set<string>(sectionItems.map((i) => i.type));
+    for (const t of SEED_TYPES) present.add(t);
+    return Array.from(present).sort();
+  }, [sectionItems]);
+
+  const visible = typeFilter
+    ? sectionItems.filter((i) => i.type === typeFilter)
+    : sectionItems;
+
+  // Default visibility for a "+ New" doc, computed from the active
+  // section so the user isn't fighting the form. In the org-context
+  // section, assume the user is creating shared org content; elsewhere,
+  // default to private.
+  const defaultVisibilityForNew: string =
+    isOrg && section === "org" ? "org" : "private";
+
+  const ctxName = ctx.kind === "org" ? ctx.name : ctxLabel(ctx);
 
   return (
-    <div className="h-full flex min-w-0">
-      {/* Types sidebar */}
-      <aside className="w-48 border-r border-neutral-200 bg-white overflow-y-auto">
-        <div className="p-2">
-          <button
-            onClick={() => setTypeFilter(null)}
-            className={
-              "w-full text-left text-sm px-3 py-1.5 rounded " +
-              (typeFilter === null
-                ? "bg-brand-50 text-brand-700 font-medium"
-                : "text-neutral-700 hover:bg-neutral-100")
-            }
-          >
-            All ({items.length})
-          </button>
-        </div>
-        <div className="px-2 pb-2 text-xs uppercase tracking-wider text-neutral-500 mt-2">
-          Types
-        </div>
-        {types.map((t) => {
-          const count = items.filter((i) => i.type === t).length;
-          return (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={
-                "w-full text-left text-sm px-3 py-1.5 " +
-                (typeFilter === t
-                  ? "bg-brand-50 text-brand-700 font-medium"
-                  : "text-neutral-700 hover:bg-neutral-100")
-              }
-            >
-              {t}{" "}
-              <span className="text-neutral-400 text-xs">({count})</span>
-            </button>
-          );
-        })}
-      </aside>
+    <div className="flex h-full min-h-0">
+      {/* Section sidebar — only in org workspace. */}
+      {isOrg && (
+        <aside className="w-44 border-r border-neutral-200 bg-white overflow-y-auto">
+          <div className="p-2">
+            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1 px-1">
+              Section
+            </div>
+            <SectionBtn
+              label="All"
+              active={section === "all"}
+              count={items.length}
+              onClick={() => {
+                setSection("all");
+                setTypeFilter(null);
+              }}
+            />
+            <SectionBtn
+              label="My context"
+              active={section === "mine"}
+              count={items.filter((i) => i.visibility === "private").length}
+              onClick={() => {
+                setSection("mine");
+                setTypeFilter(null);
+              }}
+            />
+            <SectionBtn
+              label={ctx.name}
+              active={section === "org"}
+              count={items.filter((i) => i.visibility === "org").length}
+              onClick={() => {
+                setSection("org");
+                setTypeFilter(null);
+              }}
+            />
+          </div>
+        </aside>
+      )}
 
       {/* Doc list */}
       <section className="w-80 border-r border-neutral-200 bg-white overflow-y-auto">
-        <div className="p-2 border-b border-neutral-200 flex items-center justify-between">
-          <div className="text-sm text-neutral-600">
-            {visible.length} document{visible.length === 1 ? "" : "s"}
+        <div className="p-2 border-b border-neutral-200 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-neutral-600">
+              {visible.length} document{visible.length === 1 ? "" : "s"}
+            </div>
+            <button
+              onClick={() => {
+                setSelectedId(null);
+                setCreating(true);
+              }}
+              className="text-sm text-brand-600 hover:text-brand-700"
+            >
+              + New
+            </button>
           </div>
-          <button
-            onClick={() => {
-              setSelectedId(null);
-              setCreating(true);
-            }}
-            className="text-sm text-brand-600 hover:text-brand-700"
+          <select
+            value={typeFilter ?? ""}
+            onChange={(e) => setTypeFilter(e.target.value || null)}
+            className="w-full px-2 py-1 border border-neutral-300 rounded text-xs bg-white"
           >
-            + New
-          </button>
+            <option value="">All types ({sectionItems.length})</option>
+            {types.map((t) => {
+              const count = sectionItems.filter((i) => i.type === t).length;
+              return (
+                <option key={t} value={t}>
+                  {t} ({count})
+                </option>
+              );
+            })}
+          </select>
         </div>
         {visible.length === 0 && (
           <div className="p-6 text-sm text-neutral-500 text-center">
-            No documents yet. Click <span className="text-brand-600">+ New</span> to create one.
+            No documents yet. Click <span className="text-brand-600">+ New</span>{" "}
+            to create one.
           </div>
         )}
         {visible.map((item) => (
@@ -140,9 +219,7 @@ export function DocumentsView({
             }}
             className={
               "block w-full text-left px-3 py-2 border-b border-neutral-100 " +
-              (selectedId === item.id
-                ? "bg-brand-50"
-                : "hover:bg-neutral-50")
+              (selectedId === item.id ? "bg-brand-50" : "hover:bg-neutral-50")
             }
           >
             <div className="flex items-center gap-2 mb-0.5">
@@ -167,9 +244,12 @@ export function DocumentsView({
         )}
         {creating && (
           <DocEditor
-            key={`__new__:${typeFilter ?? ""}`}
+            key={`__new__:${typeFilter ?? ""}:${defaultVisibilityForNew}`}
+            ctxKind={ctx.kind}
+            ctxName={ctxName}
             initial={null}
             defaultType={typeFilter ?? undefined}
+            defaultVisibility={defaultVisibilityForNew}
             onSaved={async (d) => {
               await refreshList();
               setCreating(false);
@@ -179,23 +259,32 @@ export function DocumentsView({
           />
         )}
         {!creating && detail && (
-          <DocEditor
-            // Keyed by id+version so switching docs remounts the form
-            // (useState only reads initial props on mount), and saving a
-            // doc also remounts so the editor shows the post-save truth
-            // (updated stamp, canonical body after round-trip).
-            key={`${detail.id}@${detail.version}`}
-            initial={detail}
-            onSaved={async (d) => {
-              await refreshList();
-              setDetail(d);
-            }}
-            onDeleted={async () => {
-              await refreshList();
-              setSelectedId(null);
-              setDetail(null);
-            }}
-          />
+          <>
+            {pendingByDoc[detail.id] > 0 && onSwitchToProposals && (
+              <ProposalBanner
+                count={pendingByDoc[detail.id]}
+                onReview={() => onSwitchToProposals(detail.id)}
+              />
+            )}
+            <DocEditor
+              // Keyed by id+version so switching docs remounts the form
+              // (useState only reads initial props on mount), and saving
+              // also remounts so the editor shows the post-save truth.
+              key={`${detail.id}@${detail.version}`}
+              ctxKind={ctx.kind}
+              ctxName={ctxName}
+              initial={detail}
+              onSaved={async (d) => {
+                await refreshList();
+                setDetail(d);
+              }}
+              onDeleted={async () => {
+                await refreshList();
+                setSelectedId(null);
+                setDetail(null);
+              }}
+            />
+          </>
         )}
         {!creating && !detail && (
           <div className="h-full flex items-center justify-center text-neutral-400 text-sm">
@@ -204,6 +293,64 @@ export function DocumentsView({
         )}
       </section>
     </div>
+  );
+}
+
+function ctxLabel(ctx: Context): string {
+  if (ctx.kind === "personal") return "Personal";
+  if (ctx.kind === "local") return ctx.name;
+  return ctx.name;
+}
+
+function ProposalBanner({
+  count,
+  onReview,
+}: {
+  count: number;
+  onReview: () => void;
+}) {
+  return (
+    <div className="mx-6 mt-6 mb-0 px-4 py-3 bg-amber-50 border border-amber-200 rounded-md flex items-center justify-between gap-3">
+      <div className="text-sm text-amber-900">
+        <strong>
+          {count} pending proposal{count === 1 ? "" : "s"}
+        </strong>{" "}
+        against this document.
+      </div>
+      <button
+        onClick={onReview}
+        className="text-xs px-3 py-1.5 rounded bg-amber-600 text-white hover:bg-amber-700"
+      >
+        Review →
+      </button>
+    </div>
+  );
+}
+
+function SectionBtn({
+  label,
+  active,
+  count,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "w-full flex items-center justify-between text-left text-sm px-3 py-1.5 rounded " +
+        (active
+          ? "bg-brand-50 text-brand-700 font-medium"
+          : "text-neutral-700 hover:bg-neutral-100")
+      }
+    >
+      <span className="truncate">{label}</span>
+      <span className="text-xs text-neutral-400 ml-2">{count}</span>
+    </button>
   );
 }
 
@@ -217,6 +364,8 @@ function VisibilityChip({ v }: { v: string }) {
       ? "bg-blue-100 text-blue-700"
       : v === "public"
       ? "bg-green-100 text-green-700"
+      : v === "org"
+      ? "bg-violet-100 text-violet-700"
       : "bg-neutral-100 text-neutral-700";
   return (
     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${color}`}>
@@ -226,34 +375,84 @@ function VisibilityChip({ v }: { v: string }) {
 }
 
 function DocEditor({
+  ctxKind,
+  ctxName,
   initial,
   defaultType,
+  defaultVisibility,
   onSaved,
   onDeleted,
   onCancel,
 }: {
+  ctxKind: Context["kind"];
+  ctxName: string;
   initial: DocDetail | null;
   /// When creating a new doc, pre-fill the type field with this
-  /// (typically the active type filter in the list view).
+  /// (typically the active type filter — so a user clicking "+ New"
+  /// while filtered to "relationships" lands typed as relationships).
   defaultType?: string;
+  /// When creating a new doc, pre-fill the visibility field. Comes
+  /// from the parent's active section. Ignored when editing.
+  defaultVisibility?: string;
   onSaved: (d: DocDetail) => Promise<void> | void;
   onDeleted?: () => Promise<void> | void;
   onCancel?: () => void;
 }) {
+  const isOrg = ctxKind === "org";
+  /// Visibility set per context (Phase 3 platform 4-layer model).
+  /// Local + personal vaults offer the personal set; org workspaces
+  /// offer org+private. The visibility dropdown unions the allowed
+  /// set with the doc's current value so legacy values render.
+  const allowedVisibilities: readonly string[] = isOrg
+    ? ORG_VISIBILITIES
+    : PERSONAL_VISIBILITIES;
+  const isNew = initial === null;
+  // Split the stored body into a leading H1 (the doc's title) and the
+  // rest. Lets the editor expose a plain Title field + free-text
+  // Content area instead of asking users to write `# Title` syntax.
+  const split = useMemo(
+    () => splitTitleAndBody(initial?.body ?? ""),
+    [initial?.body]
+  );
   const [id, setId] = useState(initial?.id ?? "");
-  const [type, setType] = useState(
-    initial?.type ?? defaultType ?? "relationships"
+  // For new docs without an active type filter, leave type empty — the
+  // select shows "Please select…" until the user chooses. Saves are
+  // gated on a non-empty type.
+  const [type, setType] = useState(initial?.type ?? defaultType ?? "");
+  const [visibility, setVisibility] = useState(
+    initial?.visibility ?? defaultVisibility ?? "private"
   );
-  const [visibility, setVisibility] = useState(initial?.visibility ?? "work");
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
-  const [source, setSource] = useState(initial?.source ?? "");
-  const [body, setBody] = useState(
-    initial?.body ?? "# New document\n\n"
-  );
+  const [title, setTitle] = useState(isNew ? "" : split.title);
+  const [body, setBody] = useState(isNew ? "" : split.body);
   const [busy, setBusy] = useState(false);
+  // Track whether the user has hand-edited the ID. We auto-derive the
+  // id from the title for new docs until that happens.
+  const [idTouched, setIdTouched] = useState(!isNew);
   const [err, setErr] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  const isNew = initial === null;
+
+  const visibilityOptions = useMemo(() => {
+    const set = new Set<string>(allowedVisibilities);
+    if (visibility) set.add(visibility);
+    return Array.from(set);
+  }, [allowedVisibilities, visibility]);
+
+  // Type dropdown: seed types plus the doc's current type if it's a
+  // custom value (so editing a non-seed-typed doc doesn't silently
+  // change it on save).
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>(SEED_TYPES);
+    if (type) set.add(type);
+    return Array.from(set).sort();
+  }, [type]);
+
+  // Auto-derive doc id from title for new docs until the user touches
+  // the id field. Slugify + clamp to 64 chars (DocumentId::is_valid).
+  useEffect(() => {
+    if (!isNew || idTouched) return;
+    setId(slugify(title));
+  }, [title, isNew, idTouched]);
 
   useEffect(() => {
     if (savedAt === null) return;
@@ -265,16 +464,22 @@ function DocEditor({
     setErr(null);
     setBusy(true);
     try {
+      const trimmedId = id.trim();
+      const trimmedType = type.trim();
+      const tagList = tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const combinedBody = combineTitleAndBody(title, body);
       const saved = await api.docWrite({
-        id: id.trim(),
-        type: type.trim(),
+        id: trimmedId,
+        type: trimmedType,
         visibility,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        source: source.trim() || null,
-        body,
+        tags: tagList,
+        // Preserve any existing provenance value on edit (the field
+        // is no longer surfaced; don't silently strip it).
+        source: initial?.source ?? null,
+        body: combinedBody,
       });
       setSavedAt(Date.now());
       await onSaved(saved);
@@ -334,7 +539,7 @@ function DocEditor({
             <span
               role="status"
               aria-live="polite"
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded transition-opacity"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded"
             >
               <span aria-hidden="true">✓</span>
               <span>Saved</span>
@@ -343,28 +548,47 @@ function DocEditor({
         </div>
       </div>
 
+      <div className="mb-4">
+        <Field label="Title">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="A short, human-readable title"
+            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-base"
+          />
+        </Field>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 mb-4">
         <Field label="ID">
           <input
             value={id}
-            onChange={(e) => setId(e.target.value)}
+            onChange={(e) => {
+              setIdTouched(true);
+              setId(e.target.value);
+            }}
             disabled={!isNew}
-            placeholder="e.g. rel-jane-smith"
+            placeholder="auto-derived from title"
             className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm font-mono disabled:bg-neutral-100"
           />
         </Field>
         <Field label="Type">
-          <input
+          <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            list="type-options"
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
-          />
-          <datalist id="type-options">
-            {SEED_TYPES.map((t) => (
-              <option key={t} value={t} />
+            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm bg-white"
+          >
+            {!type && (
+              <option value="" disabled>
+                Please select…
+              </option>
+            )}
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
-          </datalist>
+          </select>
         </Field>
         <Field label="Visibility">
           <select
@@ -372,22 +596,17 @@ function DocEditor({
             onChange={(e) => setVisibility(e.target.value)}
             className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
           >
-            {VISIBILITIES.map((v) => (
+            {visibilityOptions.map((v) => (
               <option key={v} value={v}>
                 {v}
               </option>
             ))}
           </select>
+          <p className="text-xs text-neutral-500 mt-1">
+            {audienceCopy(visibility, isOrg, ctxName)}
+          </p>
         </Field>
-        <Field label="Source (provenance)">
-          <input
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            placeholder="optional — e.g. onboarding-2026-04"
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
-          />
-        </Field>
-        <Field label="Tags (comma-separated)" full>
+        <Field label="Tags (comma-separated)">
           <input
             value={tags}
             onChange={(e) => setTags(e.target.value)}
@@ -397,12 +616,11 @@ function DocEditor({
         </Field>
       </div>
 
-      <Field label="Body (markdown)">
-        <textarea
+      <Field label="Content">
+        <RichTextEditor
           value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={20}
-          className="w-full px-3 py-2 border border-neutral-300 rounded text-sm font-mono leading-relaxed"
+          onChange={setBody}
+          placeholder="Just write — apply formatting from the toolbar above. Switch to Advanced to edit raw markdown."
         />
       </Field>
 
@@ -422,17 +640,82 @@ function DocEditor({
   );
 }
 
+/// Build a vault doc id from a free-text title. Lowercase ASCII +
+/// digits + dashes; clamps to 64 chars; matches the regex
+/// `orchext_vault::DocumentId::is_valid` enforces.
+function slugify(title: string): string {
+  const lowered = title.toLowerCase();
+  let out = "";
+  for (const ch of lowered) {
+    if ((ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9")) {
+      out += ch;
+    } else if (out.length > 0 && !out.endsWith("-")) {
+      out += "-";
+    }
+  }
+  out = out.replace(/-+$/, "");
+  if (out.length > 64) out = out.slice(0, 64).replace(/-+$/, "");
+  return out;
+}
+
+/// Split a stored markdown body into a leading H1 (the doc's title)
+/// and the rest. If the body doesn't start with `# X`, returns an
+/// empty title and the whole string as the body.
+function splitTitleAndBody(source: string): { title: string; body: string } {
+  if (!source) return { title: "", body: "" };
+  const lines = source.split("\n");
+  const first = lines[0] ?? "";
+  const m = first.match(/^# (.+)$/);
+  if (!m) return { title: "", body: source };
+  let bodyStart = 1;
+  if (lines[bodyStart] === "") bodyStart += 1;
+  return { title: m[1].trim(), body: lines.slice(bodyStart).join("\n") };
+}
+
+/// Reassemble a markdown body from a Title field + free-text body.
+/// Empty title → body stored as-is.
+function combineTitleAndBody(title: string, body: string): string {
+  const t = title.trim();
+  const b = body.replace(/^\n+/, "").replace(/\s+$/, "");
+  if (!t) return b;
+  if (!b) return `# ${t}\n`;
+  return `# ${t}\n\n${b}\n`;
+}
+
+/// Inline copy under the visibility selector. Tells the user who will
+/// see the doc — the most-asked question of the create form.
+function audienceCopy(
+  visibility: string,
+  isOrg: boolean,
+  ctxName: string
+): string {
+  switch (visibility) {
+    case "private":
+      return isOrg
+        ? `Only you, scoped to ${ctxName}.`
+        : "Only you. Stays in your personal vault.";
+    case "org":
+      return `All members of ${ctxName} can read this.`;
+    case "personal":
+      return "Only you. Tagged as personal-life context.";
+    case "work":
+      return "Only you. Tagged as work context.";
+    case "public":
+      return "Anyone with vault access can read this.";
+    default:
+      return "Custom visibility — scope is whatever your token grants.";
+  }
+}
+
 function Field({
   label,
-  full,
   children,
 }: {
   label: string;
-  full?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <label className={full ? "col-span-2" : ""}>
+    <label className="block">
       <span className="block text-xs text-neutral-600 mb-1">{label}</span>
       {children}
     </label>
