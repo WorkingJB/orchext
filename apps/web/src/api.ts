@@ -186,6 +186,15 @@ export type WriteResponse = {
 
 export const VISIBILITIES = ["public", "work", "personal", "private"] as const;
 
+/// Visibility values offered when creating a doc in a personal vault.
+/// `org` is excluded — there's no org to share with.
+export const PERSONAL_VISIBILITIES = ["private", "personal", "work"] as const;
+
+/// Visibility values offered when creating a doc in an org workspace.
+/// `personal` and `work` are excluded — both collapse into "My notes
+/// for [Org]" via `private` (Phase 3 platform 4-layer model).
+export const ORG_VISIBILITIES = ["private", "org"] as const;
+
 export const SEED_TYPES = [
   "identity",
   "roles",

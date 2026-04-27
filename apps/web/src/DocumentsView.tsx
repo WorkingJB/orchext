@@ -4,8 +4,9 @@ import {
   ApiFailure,
   ListEntry,
   Membership,
+  ORG_VISIBILITIES,
+  PERSONAL_VISIBILITIES,
   SEED_TYPES,
-  VISIBILITIES,
 } from "./api";
 import { buildSource, DocDetail, parseSource } from "./docSource";
 
@@ -14,14 +15,22 @@ type Load<T> =
   | { state: "error"; message: string }
   | { state: "ready"; data: T };
 
+/// Section toggle in the org workspace's Documents pane:
+///   "mine"  → visibility=private docs (My notes for [Org])
+///   "org"   → visibility=org docs (the org's shared context)
+///   "all"   → both, default
+type Section = "all" | "mine" | "org";
+
 function errMessage(e: unknown): string {
   return e instanceof ApiFailure ? e.message : String(e);
 }
 
 export function DocumentsView({ tenant }: { tenant: Membership }) {
+  const isOrg = tenant.kind === "org";
   const [entries, setEntries] = useState<Load<ListEntry[]>>({ state: "loading" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [section, setSection] = useState<Section>("all");
   const [detail, setDetail] = useState<Load<DocDetail> | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -72,7 +81,15 @@ export function DocumentsView({ tenant }: { tenant: Membership }) {
     };
   }, [selectedId, tenant.tenant_id]);
 
-  const items = entries.state === "ready" ? entries.data : [];
+  const allItems = entries.state === "ready" ? entries.data : [];
+  // Section pre-filter applies before type filter so the "Types" sidebar
+  // counts reflect only docs in the active section.
+  const items = useMemo(() => {
+    if (!isOrg || section === "all") return allItems;
+    if (section === "mine") return allItems.filter((i) => i.visibility === "private");
+    if (section === "org") return allItems.filter((i) => i.visibility === "org");
+    return allItems;
+  }, [allItems, isOrg, section]);
   const types = useMemo(() => {
     const present = new Set<string>(items.map((i) => i.type_));
     for (const t of SEED_TYPES) present.add(t);
@@ -85,6 +102,46 @@ export function DocumentsView({ tenant }: { tenant: Membership }) {
     <div className="flex h-full min-h-0">
       {/* Types sidebar */}
       <aside className="w-48 border-r border-neutral-200 bg-white overflow-y-auto">
+        {/* Org workspace gets a section toggle so the user knows
+            whether they're looking at "their notes for the org" or
+            "the org's shared context". Personal vault doesn't need
+            it — there's only one effective section. */}
+        {isOrg && (
+          <div className="p-2 border-b border-neutral-100">
+            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1 px-1">
+              Section
+            </div>
+            <SectionBtn
+              label="All"
+              active={section === "all"}
+              count={allItems.length}
+              onClick={() => {
+                setSection("all");
+                setTypeFilter(null);
+              }}
+            />
+            <SectionBtn
+              label="My notes"
+              active={section === "mine"}
+              count={
+                allItems.filter((i) => i.visibility === "private").length
+              }
+              onClick={() => {
+                setSection("mine");
+                setTypeFilter(null);
+              }}
+            />
+            <SectionBtn
+              label={tenant.name}
+              active={section === "org"}
+              count={allItems.filter((i) => i.visibility === "org").length}
+              onClick={() => {
+                setSection("org");
+                setTypeFilter(null);
+              }}
+            />
+          </div>
+        )}
         <div className="p-2">
           <button
             onClick={() => setTypeFilter(null)}
@@ -179,6 +236,8 @@ export function DocumentsView({ tenant }: { tenant: Membership }) {
           <DocEditor
             key="__new__"
             tenantId={tenant.tenant_id}
+            tenantName={tenant.name}
+            tenantKind={tenant.kind}
             initial={null}
             onSaved={async (d) => {
               await refreshList();
@@ -200,6 +259,8 @@ export function DocumentsView({ tenant }: { tenant: Membership }) {
           <DocEditor
             key={`${detail.data.id}@${detail.data.version}`}
             tenantId={tenant.tenant_id}
+            tenantName={tenant.name}
+            tenantKind={tenant.kind}
             initial={detail.data}
             onSaved={async (d) => {
               await refreshList();
@@ -222,6 +283,33 @@ export function DocumentsView({ tenant }: { tenant: Membership }) {
   );
 }
 
+function SectionBtn({
+  label,
+  active,
+  count,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "w-full flex items-center justify-between text-left text-sm px-3 py-1.5 rounded " +
+        (active
+          ? "bg-brand-50 text-brand-700 font-medium"
+          : "text-neutral-700 hover:bg-neutral-100")
+      }
+    >
+      <span className="truncate">{label}</span>
+      <span className="text-xs text-neutral-400 ml-2">{count}</span>
+    </button>
+  );
+}
+
 function VisibilityChip({ v }: { v: string }) {
   const color =
     v === "private"
@@ -232,6 +320,8 @@ function VisibilityChip({ v }: { v: string }) {
       ? "bg-blue-100 text-blue-700"
       : v === "public"
       ? "bg-green-100 text-green-700"
+      : v === "org"
+      ? "bg-violet-100 text-violet-700"
       : "bg-neutral-100 text-neutral-700";
   return (
     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${color}`}>
@@ -242,27 +332,51 @@ function VisibilityChip({ v }: { v: string }) {
 
 function DocEditor({
   tenantId,
+  tenantName,
+  tenantKind,
   initial,
   onSaved,
   onDeleted,
   onCancel,
 }: {
   tenantId: string;
+  tenantName: string;
+  tenantKind: string;
   initial: DocDetail | null;
   onSaved: (d: DocDetail) => Promise<void> | void;
   onDeleted?: () => Promise<void> | void;
   onCancel?: () => void;
 }) {
+  const isOrg = tenantKind === "org";
+  // Visibility set per context (Phase 3 platform 4-layer model). The
+  // create form only offers what makes sense for the current context;
+  // the editor for an existing doc keeps the doc's current visibility
+  // available even if it's outside the new set (legacy doc, custom
+  // label, etc.) so the value isn't silently dropped.
+  const allowedVisibilities: readonly string[] = isOrg
+    ? ORG_VISIBILITIES
+    : PERSONAL_VISIBILITIES;
   const isNew = initial === null;
+  const defaultVisibility = isOrg ? "private" : "private";
   const [id, setId] = useState(initial?.id ?? "");
   const [type, setType] = useState(initial?.type ?? "relationships");
-  const [visibility, setVisibility] = useState(initial?.visibility ?? "work");
+  const [visibility, setVisibility] = useState(
+    initial?.visibility ?? defaultVisibility
+  );
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
   const [sourceField, setSourceField] = useState(initial?.source ?? "");
   const [body, setBody] = useState(initial?.body ?? "# New document\n\n");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  // The visibility dropdown unions the allowed-for-context set with
+  // the current value (so legacy values render rather than vanish).
+  const visibilityOptions = useMemo(() => {
+    const set = new Set<string>(allowedVisibilities);
+    if (visibility) set.add(visibility);
+    return Array.from(set);
+  }, [allowedVisibilities, visibility]);
 
   useEffect(() => {
     if (savedAt === null) return;
@@ -411,12 +525,15 @@ function DocEditor({
             onChange={(e) => setVisibility(e.target.value)}
             className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
           >
-            {VISIBILITIES.map((v) => (
+            {visibilityOptions.map((v) => (
               <option key={v} value={v}>
                 {v}
               </option>
             ))}
           </select>
+          <p className="text-xs text-neutral-500 mt-1">
+            {audienceCopy(visibility, isOrg, tenantName)}
+          </p>
         </Field>
         <Field label="Source (provenance)">
           <input
@@ -459,6 +576,27 @@ function DocEditor({
       )}
     </div>
   );
+}
+
+/// Inline copy under the visibility selector. Tells the user who will
+/// see the doc — the most-asked question of the create form.
+function audienceCopy(visibility: string, isOrg: boolean, tenantName: string): string {
+  switch (visibility) {
+    case "private":
+      return isOrg
+        ? `Only you, scoped to ${tenantName}.`
+        : "Only you. Stays in your personal vault.";
+    case "org":
+      return `All members of ${tenantName} can read this.`;
+    case "personal":
+      return "Only you. Tagged as personal-life context.";
+    case "work":
+      return "Only you. Tagged as work context.";
+    case "public":
+      return "Anyone with vault access can read this.";
+    default:
+      return "Custom visibility — scope is whatever your token grants.";
+  }
 }
 
 function Field({
