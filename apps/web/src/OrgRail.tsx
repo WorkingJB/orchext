@@ -52,14 +52,20 @@ export function buildContexts(
 /// to. Always visible while the app is authenticated, regardless of
 /// whether the active tenant is locked or unlocked — switching to
 /// another context is a way out of a locked vault.
+///
+/// `onCreateOrg` powers the "+ Add" affordance that lets a user
+/// create an additional org out-of-band (D17f, multi-org per account).
+/// Server creates the org and makes the caller `owner`.
 export function OrgRail({
   contexts,
   activeTenantId,
   onSelect,
+  onCreateOrg,
 }: {
   contexts: Context[];
   activeTenantId: string | null;
   onSelect: (ctx: Context) => void;
+  onCreateOrg: () => void;
 }) {
   return (
     <nav
@@ -74,6 +80,15 @@ export function OrgRail({
           onClick={() => onSelect(ctx)}
         />
       ))}
+      <button
+        type="button"
+        onClick={onCreateOrg}
+        title="Add organization"
+        aria-label="Add organization"
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-lg font-light text-neutral-500 border border-dashed border-neutral-300 hover:border-neutral-500 hover:text-neutral-900 transition mt-1"
+      >
+        +
+      </button>
     </nav>
   );
 }

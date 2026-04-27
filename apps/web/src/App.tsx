@@ -197,6 +197,43 @@ function MainApp() {
     setWorkspace({ kind: "checking" });
   }
 
+  /// "+ Add organization" affordance on the rail (D17f). Prompts for
+  /// a name, calls POST /v1/orgs (caller becomes owner), then re-
+  /// fetches the rail data so the new org appears and switches into
+  /// it. Errors fall back to a window.alert — the rail's tight space
+  /// doesn't have a great surface for inline error rendering yet.
+  async function createNewOrg() {
+    const raw = window.prompt("Name your new organization:");
+    if (raw === null) return;
+    const name = raw.trim();
+    if (!name) return;
+    try {
+      const created = await api.orgCreate(name);
+      const o = await api.orgsList();
+      const t = await api.tenants();
+      const ctxs = buildContexts(t.memberships, o.memberships);
+      setContexts({
+        kind: "ready",
+        contexts: ctxs,
+        pending: o.pending,
+      });
+      const newCtx = ctxs.find(
+        (c) => c.kind === "org" && c.orgId === created.id
+      );
+      if (newCtx) {
+        heartbeat?.stop();
+        if (active) {
+          api.revokeSessionKey(active.tenantId).catch(() => undefined);
+        }
+        setActive(newCtx);
+        setWorkspace({ kind: "checking" });
+      }
+    } catch (e) {
+      const msg = e instanceof ApiFailure ? e.message : String(e);
+      window.alert(`Could not create organization: ${msg}`);
+    }
+  }
+
   if (auth.kind === "bootstrapping") {
     return (
       <div className="h-full flex items-center justify-center text-neutral-500">
@@ -274,6 +311,7 @@ function MainApp() {
           contexts={contexts.contexts}
           activeTenantId={active.tenantId}
           onSelect={selectContext}
+          onCreateOrg={createNewOrg}
         />
         {workspace.kind === "ready" && (
           <nav className="w-44 border-r border-neutral-200 bg-white p-2 flex flex-col gap-1">
