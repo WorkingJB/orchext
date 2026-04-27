@@ -358,6 +358,16 @@ function DocEditor({
     ? ORG_VISIBILITIES
     : PERSONAL_VISIBILITIES;
   const isNew = initial === null;
+  // Split the stored markdown body into a `title` (the leading `# H1`)
+  // and the rest. Lets the editor expose a plain Title field +
+  // free-text Content area instead of asking users to write `# Title`
+  // syntax themselves. On save we recombine — round-trips byte-for-
+  // byte for docs that already had a leading H1, and gains one for
+  // docs that didn't.
+  const split = useMemo(
+    () => splitTitleAndBody(initial?.body ?? ""),
+    [initial?.body]
+  );
   const [id, setId] = useState(initial?.id ?? "");
   const [type, setType] = useState(
     initial?.type ?? defaultType ?? "relationships"
@@ -367,7 +377,8 @@ function DocEditor({
   );
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
   const [sourceField, setSourceField] = useState(initial?.source ?? "");
-  const [body, setBody] = useState(initial?.body ?? "# New document\n\n");
+  const [title, setTitle] = useState(isNew ? "" : split.title);
+  const [body, setBody] = useState(isNew ? "" : split.body);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -379,6 +390,15 @@ function DocEditor({
     if (visibility) set.add(visibility);
     return Array.from(set);
   }, [allowedVisibilities, visibility]);
+
+  // Type dropdown: the seed types plus the doc's current type if it's
+  // a custom value (so editing a doc with a non-seed type doesn't
+  // silently change it on save).
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>(SEED_TYPES);
+    if (type) set.add(type);
+    return Array.from(set).sort();
+  }, [type]);
 
   useEffect(() => {
     if (savedAt === null) return;
@@ -398,6 +418,7 @@ function DocEditor({
         .map((t) => t.trim())
         .filter(Boolean);
 
+      const combinedBody = combineTitleAndBody(title, body);
       const canonical = buildSource({
         id: trimmedId,
         type: trimmedType,
@@ -406,7 +427,7 @@ function DocEditor({
         links: initial?.links ?? [],
         aliases: initial?.aliases ?? [],
         source: provenance,
-        body,
+        body: combinedBody,
       });
 
       const resp = await api.docWrite(
@@ -426,7 +447,7 @@ function DocEditor({
         source: provenance,
         created: initial?.created ?? null,
         updated: initial?.updated ?? null,
-        body,
+        body: combinedBody,
         version: resp.version,
         updated_at: resp.updated_at,
       };
@@ -498,6 +519,17 @@ function DocEditor({
         </div>
       </div>
 
+      <div className="mb-4">
+        <Field label="Title">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="A short, human-readable title"
+            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-base"
+          />
+        </Field>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 mb-4">
         <Field label="ID">
           <input
@@ -509,17 +541,17 @@ function DocEditor({
           />
         </Field>
         <Field label="Type">
-          <input
+          <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            list="type-options"
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
-          />
-          <datalist id="type-options">
-            {SEED_TYPES.map((t) => (
-              <option key={t} value={t} />
+            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm bg-white"
+          >
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
-          </datalist>
+          </select>
         </Field>
         <Field label="Visibility">
           <select
@@ -555,12 +587,13 @@ function DocEditor({
         </Field>
       </div>
 
-      <Field label="Body (markdown)">
+      <Field label="Content">
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={20}
-          className="w-full px-3 py-2 border border-neutral-300 rounded text-sm font-mono leading-relaxed"
+          placeholder="Just write — line breaks and paragraphs work as expected. Markdown formatting (**bold**, lists, links) is supported but optional."
+          className="w-full px-3 py-2 border border-neutral-300 rounded text-sm leading-relaxed"
         />
       </Field>
 
@@ -578,6 +611,35 @@ function DocEditor({
       )}
     </div>
   );
+}
+
+/// Split a stored markdown body into a leading H1 (the doc's title)
+/// and the rest of the content. If the body doesn't start with `# X`,
+/// returns an empty title and the whole string as the body.
+///
+/// Pairs with `combineTitleAndBody` — round-trips cleanly for docs
+/// whose body already had a leading H1.
+function splitTitleAndBody(source: string): { title: string; body: string } {
+  if (!source) return { title: "", body: "" };
+  const lines = source.split("\n");
+  const first = lines[0] ?? "";
+  const m = first.match(/^# (.+)$/);
+  if (!m) return { title: "", body: source };
+  // Drop the H1 and a single immediately-following blank line if
+  // present, so the body the user sees starts at the actual content.
+  let bodyStart = 1;
+  if (lines[bodyStart] === "") bodyStart += 1;
+  return { title: m[1].trim(), body: lines.slice(bodyStart).join("\n") };
+}
+
+/// Reassemble a markdown body from a Title field + free-text body.
+/// If `title` is empty, the body is stored as-is (no H1 added).
+function combineTitleAndBody(title: string, body: string): string {
+  const t = title.trim();
+  const b = body.replace(/^\n+/, "").replace(/\s+$/, "");
+  if (!t) return b;
+  if (!b) return `# ${t}\n`;
+  return `# ${t}\n\n${b}\n`;
 }
 
 /// Inline copy under the visibility selector. Tells the user who will
