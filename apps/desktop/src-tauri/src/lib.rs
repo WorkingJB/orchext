@@ -6,6 +6,7 @@ mod orgs;
 mod proposals;
 mod settings;
 mod state;
+mod teams;
 mod watch;
 mod workspaces;
 
@@ -65,6 +66,18 @@ pub fn run() {
             orgs::org_invitations,
             orgs::org_invite,
             orgs::org_invitation_delete,
+            orgs::org_logo_get,
+            orgs::org_logo_upload,
+            orgs::org_logo_delete,
+            teams::teams_list,
+            teams::team_create,
+            teams::team_get,
+            teams::team_update,
+            teams::team_delete,
+            teams::team_members,
+            teams::team_member_add,
+            teams::team_member_update,
+            teams::team_member_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running orchext-desktop");

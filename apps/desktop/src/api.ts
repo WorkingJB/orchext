@@ -43,6 +43,9 @@ export type DocDetail = {
   updated: string | null;
   body: string;
   version: string;
+  /// Team binding for `visibility = 'team'` docs (Phase 3 platform
+  /// Slice 2). Always absent for local workspaces.
+  team_id?: string | null;
 };
 
 export type DocInput = {
@@ -54,6 +57,7 @@ export type DocInput = {
   aliases?: string[];
   source?: string | null;
   body: string;
+  team_id?: string | null;
 };
 
 export type TokenInfo = {
@@ -250,6 +254,42 @@ export type Invitation = {
   redeemed_by: string | null;
 };
 
+// ---------- Teams (Phase 3 platform Slice 2) ----------
+
+export type Team = {
+  id: string;
+  org_id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+};
+
+export type TeamSummary = Team & {
+  member_count: number;
+  viewer_role: "manager" | "member" | null;
+};
+
+export type TeamMemberDetail = {
+  account_id: string;
+  email: string;
+  display_name: string;
+  role: "manager" | "member";
+  joined_at: string;
+};
+
+export type LogoData = {
+  data_url: string;
+  content_type: string;
+  etag: string | null;
+};
+
+export type LogoUploadResponse = {
+  logo_url: string;
+  content_type: string;
+  sha256: string;
+  bytes: number;
+};
+
 // ---------- API surface ----------
 
 export const api = {
@@ -400,6 +440,84 @@ export const api = {
       orgId,
       invitationId,
     }),
+
+  // ---------- Org logo (Slice 2) ----------
+  orgLogoGet: (workspaceId: string, orgId: string) =>
+    invoke<LogoData | null>("org_logo_get", { workspaceId, orgId }),
+  orgLogoUpload: (workspaceId: string, orgId: string, path: string) =>
+    invoke<LogoUploadResponse>("org_logo_upload", {
+      workspaceId,
+      orgId,
+      path,
+    }),
+  orgLogoDelete: (workspaceId: string, orgId: string) =>
+    invoke<void>("org_logo_delete", { workspaceId, orgId }),
+
+  // ---------- Teams ----------
+  teamsList: (workspaceId: string, orgId: string) =>
+    invoke<{ teams: TeamSummary[] }>("teams_list", { workspaceId, orgId }),
+  teamCreate: (workspaceId: string, orgId: string, name: string, slug?: string) =>
+    invoke<Team>("team_create", {
+      workspaceId,
+      orgId,
+      input: slug ? { name, slug } : { name },
+    }),
+  teamGet: (workspaceId: string, orgId: string, teamId: string) =>
+    invoke<Team>("team_get", { workspaceId, orgId, teamId }),
+  teamUpdate: (
+    workspaceId: string,
+    orgId: string,
+    teamId: string,
+    input: { name?: string; slug?: string }
+  ) =>
+    invoke<Team>("team_update", { workspaceId, orgId, teamId, input }),
+  teamDelete: (workspaceId: string, orgId: string, teamId: string) =>
+    invoke<void>("team_delete", { workspaceId, orgId, teamId }),
+  teamMembers: (workspaceId: string, orgId: string, teamId: string) =>
+    invoke<{ members: TeamMemberDetail[] }>("team_members", {
+      workspaceId,
+      orgId,
+      teamId,
+    }),
+  teamMemberAdd: (
+    workspaceId: string,
+    orgId: string,
+    teamId: string,
+    accountId: string,
+    role?: "manager" | "member"
+  ) =>
+    invoke<TeamMemberDetail>("team_member_add", {
+      workspaceId,
+      orgId,
+      teamId,
+      input: role ? { account_id: accountId, role } : { account_id: accountId },
+    }),
+  teamMemberUpdate: (
+    workspaceId: string,
+    orgId: string,
+    teamId: string,
+    accountId: string,
+    role: "manager" | "member"
+  ) =>
+    invoke<TeamMemberDetail>("team_member_update", {
+      workspaceId,
+      orgId,
+      teamId,
+      accountId,
+      input: { role },
+    }),
+  teamMemberRemove: (
+    workspaceId: string,
+    orgId: string,
+    teamId: string,
+    accountId: string
+  ) =>
+    invoke<void>("team_member_remove", {
+      workspaceId,
+      orgId,
+      teamId,
+      accountId,
+    }),
 };
 
 // ---------- Visibility constants (FORMAT v0.2) ----------
@@ -413,7 +531,9 @@ export const PERSONAL_VISIBILITIES = ["private", "personal", "work"] as const;
 /// Visibility values offered when creating a doc in an org workspace.
 /// `personal` and `work` are excluded — both collapse into "My notes
 /// for [Org]" via `private` (Phase 3 platform 4-layer model).
-export const ORG_VISIBILITIES = ["private", "org"] as const;
+/// `team` is appended dynamically by the doc editor when the viewer
+/// can write to at least one team.
+export const ORG_VISIBILITIES = ["private", "org", "team"] as const;
 
 export const SEED_TYPES = [
   "identity",

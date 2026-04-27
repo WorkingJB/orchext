@@ -167,6 +167,31 @@ export type Invitation = {
   redeemed_by: string | null;
 };
 
+// ---------- Teams (Phase 3 platform Slice 2) ----------
+
+export type Team = {
+  id: string;
+  org_id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+};
+
+/// List entry — same shape as Team plus member_count and the viewer's
+/// team-level role (`null` if the viewer isn't a member).
+export type TeamSummary = Team & {
+  member_count: number;
+  viewer_role: "manager" | "member" | null;
+};
+
+export type TeamMemberDetail = {
+  account_id: string;
+  email: string;
+  display_name: string;
+  role: "manager" | "member";
+  joined_at: string;
+};
+
 // ---------- Documents ----------
 
 export type ListEntry = {
@@ -176,6 +201,7 @@ export type ListEntry = {
   title: string;
   updated: string | null;
   tags: string[];
+  team_id?: string | null;
 };
 
 export type DocResponse = {
@@ -185,6 +211,7 @@ export type DocResponse = {
   version: string;
   updated_at: string;
   source: string;
+  team_id?: string | null;
 };
 
 export type WriteResponse = {
@@ -193,6 +220,7 @@ export type WriteResponse = {
   visibility: string;
   version: string;
   updated_at: string;
+  team_id?: string | null;
 };
 
 export const VISIBILITIES = ["public", "work", "personal", "private"] as const;
@@ -204,7 +232,9 @@ export const PERSONAL_VISIBILITIES = ["private", "personal", "work"] as const;
 /// Visibility values offered when creating a doc in an org workspace.
 /// `personal` and `work` are excluded — both collapse into "My notes
 /// for [Org]" via `private` (Phase 3 platform 4-layer model).
-export const ORG_VISIBILITIES = ["private", "org"] as const;
+/// `team` is appended dynamically when the viewer has team memberships
+/// in this org or is an admin (see DocumentsView).
+export const ORG_VISIBILITIES = ["private", "org", "team"] as const;
 
 export const SEED_TYPES = [
   "identity",
@@ -422,6 +452,104 @@ export const api = {
       `/v1/orgs/${encodeURIComponent(orgId)}/invitations/${encodeURIComponent(invitationId)}`
     ),
 
+  // ---------- Teams ----------
+  teamsList: (orgId: string) =>
+    request<{ teams: TeamSummary[] }>(
+      "GET",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams`
+    ),
+  teamCreate: (orgId: string, name: string, slug?: string) =>
+    request<Team>(
+      "POST",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams`,
+      slug ? { name, slug } : { name }
+    ),
+  teamGet: (orgId: string, teamId: string) =>
+    request<Team>(
+      "GET",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`
+    ),
+  teamUpdate: (
+    orgId: string,
+    teamId: string,
+    input: { name?: string; slug?: string }
+  ) =>
+    request<Team>(
+      "PATCH",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`,
+      input
+    ),
+  teamDelete: (orgId: string, teamId: string) =>
+    request<void>(
+      "DELETE",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}`
+    ),
+  teamMembers: (orgId: string, teamId: string) =>
+    request<{ members: TeamMemberDetail[] }>(
+      "GET",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}/members`
+    ),
+  teamMemberAdd: (
+    orgId: string,
+    teamId: string,
+    accountId: string,
+    role?: "manager" | "member"
+  ) =>
+    request<TeamMemberDetail>(
+      "POST",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}/members`,
+      role ? { account_id: accountId, role } : { account_id: accountId }
+    ),
+  teamMemberUpdate: (
+    orgId: string,
+    teamId: string,
+    accountId: string,
+    role: "manager" | "member"
+  ) =>
+    request<TeamMemberDetail>(
+      "PATCH",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(accountId)}`,
+      { role }
+    ),
+  teamMemberRemove: (orgId: string, teamId: string, accountId: string) =>
+    request<void>(
+      "DELETE",
+      `/v1/orgs/${encodeURIComponent(orgId)}/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(accountId)}`
+    ),
+
+  // ---------- Org logo ----------
+  /// Multipart upload. Browser <input type="file"> already gives us a
+  /// `File`; we hand that straight to FormData. Returns the new
+  /// logo_url (path to GET) and sha256 for cache busting.
+  orgLogoUpload: async (orgId: string, file: File) => {
+    const headers: Record<string, string> = {};
+    const csrf = getCsrfToken();
+    if (csrf) headers["X-Orchext-CSRF"] = csrf;
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(
+      `/v1/orgs/${encodeURIComponent(orgId)}/logo`,
+      { method: "POST", headers, credentials: "include", body: form }
+    );
+    const text = await res.text();
+    const parsed = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      const err = parsed?.error ?? {
+        tag: "server_error",
+        message: res.statusText,
+      };
+      throw new ApiFailure({ ...err, status: res.status });
+    }
+    return parsed as {
+      logo_url: string;
+      content_type: string;
+      sha256: string;
+      bytes: number;
+    };
+  },
+  orgLogoDelete: (orgId: string) =>
+    request<void>("DELETE", `/v1/orgs/${encodeURIComponent(orgId)}/logo`),
+
   docList: (tenantId: string) =>
     request<{ entries: ListEntry[] }>(
       "GET",
@@ -436,13 +564,18 @@ export const api = {
     tenantId: string,
     docId: string,
     source: string,
-    baseVersion: string | null
-  ) =>
-    request<WriteResponse>(
+    baseVersion: string | null,
+    teamId?: string | null
+  ) => {
+    const body: Record<string, unknown> = { source };
+    if (baseVersion !== null) body.base_version = baseVersion;
+    if (teamId) body.team_id = teamId;
+    return request<WriteResponse>(
       "PUT",
       `/v1/t/${tenantId}/vault/docs/${encodeURIComponent(docId)}`,
-      baseVersion === null ? { source } : { source, base_version: baseVersion }
-    ),
+      body
+    );
+  },
   docDelete: (tenantId: string, docId: string, baseVersion: string | null) => {
     const q = baseVersion
       ? `?base_version=${encodeURIComponent(baseVersion)}`

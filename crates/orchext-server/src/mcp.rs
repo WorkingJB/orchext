@@ -284,6 +284,10 @@ async fn context_search(
                  WHERE t.tenant_id = d.tenant_id
                    AND t.doc_id = d.doc_id
                    AND t.tag = ANY($5)))
+          AND (d.visibility != 'team' OR EXISTS (
+                SELECT 1 FROM team_memberships tm
+                 WHERE tm.team_id = d.team_id
+                   AND tm.account_id = $7))
         ORDER BY score DESC
         LIMIT $6
         "#,
@@ -294,6 +298,7 @@ async fn context_search(
     .bind(nullable_array(&input.types))
     .bind(nullable_array(&input.tags))
     .bind(limit as i64)
+    .bind(token.issued_by)
     .fetch_all(&state.db)
     .await
     {
@@ -342,6 +347,7 @@ struct GetRow {
     frontmatter: Value,
     body: String,
     version: String,
+    team_id: Option<Uuid>,
 }
 
 async fn context_get(
@@ -358,7 +364,7 @@ async fn context_get(
 
     let row: Option<GetRow> = sqlx::query_as(
         r#"
-        SELECT type_, visibility, frontmatter, body, version
+        SELECT type_, visibility, frontmatter, body, version, team_id
         FROM documents
         WHERE tenant_id = $1 AND doc_id = $2
         "#,
@@ -377,6 +383,12 @@ async fn context_get(
     };
 
     if !scope_allows(&token.scope, &row.visibility) {
+        audit_denied(state, token, TOOL_GET, Some(input.id.clone())).await;
+        return Err(McpError::NotAuthorized);
+    }
+    if row.visibility == "team"
+        && !is_team_member(state, row.team_id, token.issued_by).await?
+    {
         audit_denied(state, token, TOOL_GET, Some(input.id.clone())).await;
         return Err(McpError::NotAuthorized);
     }
@@ -437,6 +449,10 @@ async fn context_list(
                    AND t.doc_id = d.doc_id
                    AND t.tag = ANY($4)))
           AND ($5::date IS NULL OR (d.frontmatter->>'updated')::date >= $5)
+          AND (d.visibility != 'team' OR EXISTS (
+                SELECT 1 FROM team_memberships tm
+                 WHERE tm.team_id = d.team_id
+                   AND tm.account_id = $7))
         ORDER BY d.updated_at DESC, d.doc_id ASC
         LIMIT $6
         "#,
@@ -447,6 +463,7 @@ async fn context_list(
     .bind(nullable_array(&input.tags))
     .bind(input.updated_since)
     .bind(limit as i64)
+    .bind(token.issued_by)
     .fetch_all(&state.db)
     .await
     .map_err(|e| McpError::Server(e.to_string()))?;
@@ -497,10 +514,11 @@ async fn context_propose(
     struct DocRow {
         visibility: String,
         version: String,
+        team_id: Option<Uuid>,
     }
     let row: Option<DocRow> = sqlx::query_as(
         r#"
-        SELECT visibility, version
+        SELECT visibility, version, team_id
         FROM documents
         WHERE tenant_id = $1 AND doc_id = $2
         "#,
@@ -516,6 +534,12 @@ async fn context_propose(
         return Err(McpError::NotAuthorized);
     };
     if !scope_allows(&token.scope, &row.visibility) {
+        audit_denied(state, token, TOOL_PROPOSE, Some(input.id.clone())).await;
+        return Err(McpError::NotAuthorized);
+    }
+    if row.visibility == "team"
+        && !is_team_member(state, row.team_id, token.issued_by).await?
+    {
         audit_denied(state, token, TOOL_PROPOSE, Some(input.id.clone())).await;
         return Err(McpError::NotAuthorized);
     }
@@ -612,11 +636,16 @@ async fn handle_resources_list(
         SELECT doc_id, type_, title, visibility
         FROM documents
         WHERE tenant_id = $1 AND visibility = ANY($2)
+          AND (visibility != 'team' OR EXISTS (
+                SELECT 1 FROM team_memberships tm
+                 WHERE tm.team_id = documents.team_id
+                   AND tm.account_id = $3))
         ORDER BY type_ ASC, doc_id ASC
         "#,
     )
     .bind(token.tenant_id)
     .bind(&allowed)
+    .bind(token.issued_by)
     .fetch_all(&state.db)
     .await
     .map_err(|e| McpError::Server(e.to_string()))?;
@@ -657,11 +686,16 @@ async fn handle_resources_read(
                 SELECT DISTINCT type_
                 FROM documents
                 WHERE tenant_id = $1 AND visibility = ANY($2)
+                  AND (visibility != 'team' OR EXISTS (
+                        SELECT 1 FROM team_memberships tm
+                         WHERE tm.team_id = documents.team_id
+                           AND tm.account_id = $3))
                 ORDER BY type_ ASC
                 "#,
             )
             .bind(token.tenant_id)
             .bind(&allowed)
+            .bind(token.issued_by)
             .fetch_all(&state.db)
             .await
             .map_err(|e| McpError::Server(e.to_string()))?;
@@ -680,12 +714,17 @@ async fn handle_resources_read(
                 r#"
                 SELECT doc_id FROM documents
                 WHERE tenant_id = $1 AND type_ = $2 AND visibility = ANY($3)
+                  AND (visibility != 'team' OR EXISTS (
+                        SELECT 1 FROM team_memberships tm
+                         WHERE tm.team_id = documents.team_id
+                           AND tm.account_id = $4))
                 ORDER BY doc_id ASC
                 "#,
             )
             .bind(token.tenant_id)
             .bind(&type_)
             .bind(&allowed)
+            .bind(token.issued_by)
             .fetch_all(&state.db)
             .await
             .map_err(|e| McpError::Server(e.to_string()))?;
@@ -702,7 +741,7 @@ async fn handle_resources_read(
         Parsed::Document { type_: _, id } => {
             let row: Option<GetRow> = sqlx::query_as(
                 r#"
-                SELECT type_, visibility, frontmatter, body, version
+                SELECT type_, visibility, frontmatter, body, version, team_id
                 FROM documents
                 WHERE tenant_id = $1 AND doc_id = $2
                 "#,
@@ -717,6 +756,12 @@ async fn handle_resources_read(
                 return Err(McpError::NotAuthorized);
             };
             if !scope_allows(&token.scope, &row.visibility) {
+                audit_denied(state, token, "resources.read", Some(id.clone())).await;
+                return Err(McpError::NotAuthorized);
+            }
+            if row.visibility == "team"
+                && !is_team_member(state, row.team_id, token.issued_by).await?
+            {
                 audit_denied(state, token, "resources.read", Some(id.clone())).await;
                 return Err(McpError::NotAuthorized);
             }
@@ -816,6 +861,35 @@ async fn resolve_token(
 }
 
 // ---------- helpers ----------
+
+/// Membership check used by team-visibility gates on the post-fetch
+/// path (`context_get`, `context_propose`, `resources/read`). Returns
+/// `Ok(true)` when the issuing account has any row in
+/// `team_memberships` for the doc's team. Org admin/owner is *not* a
+/// shortcut here — MCP tokens are narrower than session credentials,
+/// and granting an admin's token blanket access would let a token
+/// outlive the access path the admin actually uses elsewhere.
+async fn is_team_member(
+    state: &AppState,
+    team_id: Option<Uuid>,
+    account_id: Uuid,
+) -> Result<bool, McpError> {
+    let Some(tid) = team_id else {
+        // CHECK constraint pins team_id NOT NULL when visibility =
+        // 'team' — a None here would mean the row violates the
+        // invariant. Treat defensively as "not a member".
+        return Ok(false);
+    };
+    let row: Option<(i64,)> = sqlx::query_as(
+        "SELECT 1 FROM team_memberships WHERE team_id = $1 AND account_id = $2",
+    )
+    .bind(tid)
+    .bind(account_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| McpError::Server(e.to_string()))?;
+    Ok(row.is_some())
+}
 
 /// Visibility check shared by `context_get` and `resources/read`.
 /// `private` is a hard floor — only tokens whose scope explicitly
@@ -936,12 +1010,6 @@ async fn audit_record(
     if let Err(e) = tx.commit().await {
         tracing::warn!(err = %e, "failed to commit mcp audit entry");
     }
-
-    // Issued-by isn't surfaced anywhere in MCP responses — only the
-    // token id matters at the protocol layer. We hold it on the
-    // resolved-token struct so future per-issuer features (e.g.
-    // per-issuer rate limiting) can read it without another lookup.
-    let _ = token.issued_by;
 }
 
 #[cfg(test)]

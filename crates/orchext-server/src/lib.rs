@@ -18,11 +18,13 @@ pub mod error;
 pub mod idx;
 pub mod mcp;
 pub mod oauth;
+pub mod org_logo;
 pub mod orgs;
 pub mod password;
 pub mod proposals;
 pub mod session_keys;
 pub mod sessions;
+pub mod teams;
 pub mod tenants;
 pub mod tokens;
 
@@ -121,6 +123,8 @@ pub fn router(state: AppState) -> Router {
     // Session-authed, non-tenant-scoped (membership listing + org metadata).
     let tenants_route: Router<AppState> = tenants::router()
         .merge(orgs::router())
+        .merge(teams::router())
+        .merge(org_logo::router())
         .route_layer(middleware::from_fn(auth::csrf_guard))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),

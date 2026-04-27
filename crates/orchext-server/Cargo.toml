@@ -15,7 +15,7 @@ name = "orchext-server"
 path = "src/main.rs"
 
 [dependencies]
-axum = { workspace = true }
+axum = { workspace = true, features = ["multipart"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tower_governor = { workspace = true }

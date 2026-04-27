@@ -23,6 +23,10 @@ export type DocDetail = DocFrontmatter & {
   body: string;
   version: string;
   updated_at: string;
+  /// Server-side metadata pin for `visibility = 'team'` docs (Phase 3
+  /// platform Slice 2). Lives outside frontmatter — the YAML carries
+  /// only `visibility: team`, the team binding is on the row.
+  team_id?: string | null;
 };
 
 const OPEN = "---\n";

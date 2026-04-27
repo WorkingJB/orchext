@@ -21,7 +21,7 @@ that limit, consolidate scope or break out a sub-phase.
 desktop frontends. wasm-pack 0.14 drives the browser crypto build.
 Workspace at repo root.
 
-**Test totals:** 224/224 passing with `DATABASE_URL` set; 162/162
+**Test totals:** 237/237 passing with `DATABASE_URL` set; 164/164
 without the DB-required suite (Rust only — `apps/web` has no JS test
 suite yet). +52 across the OAuth + MCP HTTP rounds, +4 in the
 initial deployment-hardening pass (1 `/readyz` happy-path, 3 CORS
@@ -30,7 +30,11 @@ XFF regression — pins the signup/login fix below), +10 in slice 4
 (`context.propose`): +6 server integration tests covering the
 propose → list → approve / reject paths and `version_conflict` /
 `proposals_disabled` gates, +4 stdio MCP unit tests for the
-`.orchext/proposals/` spool path.
+`.orchext/proposals/` spool path. +13 in Slice 2 (teams + logo
+upload): +11 server integration tests in `teams_flow.rs` covering
+CRUD, role gates, team-visibility filter, strict
+`team_id ⇔ visibility=team` coupling, and logo upload paths; +1 unit
+test for `Visibility::Team` round-trip; +1 for `teams::derive_slug`.
 
 **Scope shuffle 2026-04-25:** four scope changes folded in one pass.
 (1) **Graph view dropped.** Desktop's `GraphView.tsx` +
@@ -68,13 +72,13 @@ task aggregation + agent orchestration. Plan detail in
 | `orchext-auth`   | ✅ shipped     | 11   | 9           | Opaque tokens + Argon2id + scopes      |
 | `orchext-index`  | ✅ shipped     | 4    | 6           | SQLite + FTS5; search / graph / filter |
 | `orchext-mcp`    | ✅ shipped     | 11   | 26          | JSON-RPC + stdio; rate limit + fs watcher; `context_propose` spool |
-| `orchext-desktop`| ✅ 2a + 2b.2 + 2b.3 + 2b.5 + 3-slice1 | 7 | —           | Multi-vault + remote connect + unlock/lock + proposals + org rail + admin views |
-| `orchext-server` | ✅ 2b.3 + 2b.5 + 3-slice1 | 45 | 50          | Auth + vault + index + tokens + audit + crypto + OAuth + MCP HTTP + proposals + orgs/members/pending/invitations + readiness + CORS |
-| `orchext-sync`   | ✅ 2b.2 + 2b.3 + 3-slice1 | 0   | —           | `RemoteVaultDriver` + crypto control calls + server-level orgs/auth helpers |
+| `orchext-desktop`| ✅ 2a + 2b.2 + 2b.3 + 2b.5 + 3-slice1 + 3-slice2 | 7 | —           | Multi-vault + remote connect + unlock/lock + proposals + org rail + admin views + teams + logo upload |
+| `orchext-server` | ✅ 2b.3 + 2b.5 + 3-slice1 + 3-slice2 | 47 | 61          | Auth + vault + index + tokens + audit + crypto + OAuth + MCP HTTP + proposals + orgs/members/pending/invitations + teams + logo upload + readiness + CORS |
+| `orchext-sync`   | ✅ 2b.2 + 2b.3 + 3-slice1 + 3-slice2 | 0   | —           | `RemoteVaultDriver` + crypto control calls + server-level orgs/auth/teams helpers + team-aware read/write + logo upload |
 | `orchext-oauth-client` | ✅ 2b.5 | 9 | —           | PKCE agent helper + `orchext-oauth` CLI    |
 | `orchext-crypto` | ✅ 2b.3 + wasm32 | 13 | —           | Argon2id KDF + XChaCha20-Poly1305 AEAD; browser build clean |
 | `orchext-crypto-wasm` | ✅ 2b.4 | —  | —               | wasm-bindgen surface; 4 ops: generateSalt/ContentKey, wrap/unwrap |
-| `orchext-web`    | ✅ 2b.4 + 2b.5 + 3-slice1 | — | —            | Login + tenant picker + unlock + doc CRUD + tokens + audit + OAuth consent + org rail + admin views |
+| `orchext-web`    | ✅ 2b.4 + 2b.5 + 3-slice1 + 3-slice2 | — | —            | Login + tenant picker + unlock + doc CRUD + tokens + audit + OAuth consent + org rail + admin views + teams + logo upload |
 
 **Production hardening 2026-04-26 (post first deploy to
 `app.orchext.ai` + `test-app.orchext.ai`):** three fixes landed after
@@ -173,6 +177,42 @@ base-version optimistic concurrency, tokens admin, and audit list.
 Graph view dropped from both clients; onboarding chat moved to
 Phase 3 platform.
 
+**Phase 3 platform Slice 2 — Teams + logo upload — shipped 2026-04-27**
+*([Notion](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33))*.
+End-to-end teams platform plus the logo-upload follow-on that fixed
+Slice 1's external-URL field. (1) **Server** — `0010_teams.sql`
+introduces `teams` + `team_memberships` + `documents.team_id` (with a
+CHECK constraint pinning `team_id IS NOT NULL ⟺ visibility = 'team'`);
+new `crates/orchext-server/src/teams.rs` exposes
+`/v1/orgs/:org_id/teams[/...]` CRUD + member-mgmt with org-admin /
+team-manager / org-member role gates; `documents.rs`, `mcp.rs`, and
+`idx.rs` filters extend to honor team membership on read paths
+(org admins pass through HTTP; MCP tokens require an explicit
+team_memberships row, deliberately narrower); write/delete gate
+on team docs is admin/owner OR team manager. **Logo upload**
+follow-on landed in the same slice: `0011_org_logos.sql` adds the
+bytea-backed `org_logos` table, `org_logo.rs` adds
+`POST/GET/DELETE /v1/orgs/:id/logo` (multipart, 512KB cap, magic-byte
+sniff for PNG / JPEG / GIF / WEBP, ETag = sha256). (2) **Web** —
+`TeamsView.tsx` (two-pane list + detail) added to Settings; team
+picker on the doc create form with audience copy + visibility chip;
+`OrgSettingsView.tsx` swaps text input for a file picker + preview +
+remove. (3) **Desktop** — full parity port: new `teams.rs` Tauri
+commands + UI; `commands::doc_read` / `doc_write` branch on remote
+workspaces and route through `RemoteVaultDriver`'s new
+`read_with_team_id` / `write_versioned_with_team` so `team_id`
+survives the VaultDriver trait boundary; OrgSettingsView uses the
+native file picker via `tauri-plugin-dialog`; `App.tsx` hydrates
+`Context.logoData` post-buildContexts so the rail renders the logo
+via a base64 data URL (the desktop browser can't bearer-auth
+`<img src>` directly). (4) **Tests** — 11 integration tests in
+`teams_flow.rs` covering CRUD, role gates, visibility filter, strict
+coupling, and logo upload paths; +1 unit test for `Visibility::Team`
+round-trip and +1 for `derive_slug`. **Cuts:** logos backed by
+Postgres bytea (not S3/disk) — fine at v1 logo sizes; migrate if it
+ever grows beyond this single use case. Slice 3 (web onboarding chat)
+and Slice 4 (OS keychain) remain.
+
 **Phase 3 platform Slice 1 — Org foundation — shipped 2026-04-27**
 *([Notion](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8))*.
 End-to-end org-and-membership platform. (1) **Server** — `organizations`
@@ -261,12 +301,13 @@ phase docs themselves.
 ### In flight
 
 - [`phases/phase-3-platform.md`](phases/phase-3-platform.md) —
-  Orgs + teams + web onboarding chat + OS keychain. **Slice 1
-  (Org foundation) shipped 2026-04-27** on web + desktop (see
-  narrative above). **Slices 2-4 remain.**
+  Orgs + teams + web onboarding chat + OS keychain. **Slices 1
+  and 2 (Org foundation, Teams + logo upload) shipped
+  2026-04-27** on web + desktop (see narratives above). **Slices
+  3-4 remain.**
   *(Notion: [Slice 1 Org foundation — Done](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) ·
   [`org/` seed type — Done](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07) ·
-  [Slice 2 Teams](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33) ·
+  [Slice 2 Teams — Done](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33) ·
   [Slice 3 onboarding chat](https://www.notion.so/34d47fdae49a81d6a012e90cbbcb0d0b) ·
   [Slice 4 OS keychain](https://www.notion.so/34d47fdae49a819c8ce9dd6511989596))*
 

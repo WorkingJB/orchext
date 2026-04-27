@@ -11,6 +11,11 @@ pub enum Visibility {
     /// Visible to all members of the organization the document
     /// belongs to. FORMAT v0.2; Phase 3 platform Slice 1.
     Org,
+    /// Visible only to members of a specific team within an org. The
+    /// team is identified by `documents.team_id` on the server side;
+    /// the visibility label itself carries no team identity. FORMAT
+    /// v0.3; Phase 3 platform Slice 2 (D17c).
+    Team,
     Custom(String),
 }
 
@@ -22,6 +27,7 @@ impl Visibility {
             "personal" => Ok(Self::Personal),
             "private" => Ok(Self::Private),
             "org" => Ok(Self::Org),
+            "team" => Ok(Self::Team),
             other => {
                 if Self::is_valid_label(other) {
                     Ok(Self::Custom(other.to_string()))
@@ -39,6 +45,7 @@ impl Visibility {
             Self::Personal => "personal",
             Self::Private => "private",
             Self::Org => "org",
+            Self::Team => "team",
             Self::Custom(s) => s,
         }
     }
@@ -52,6 +59,14 @@ impl Visibility {
     /// literal `org` to surface a doc tagged with it.
     pub fn is_org(&self) -> bool {
         matches!(self, Self::Org)
+    }
+
+    /// True for the built-in `team` visibility. Doc-level access
+    /// additionally requires the caller to be a member of the team
+    /// named by `documents.team_id`; the scope label is necessary
+    /// but not sufficient.
+    pub fn is_team(&self) -> bool {
+        matches!(self, Self::Team)
     }
 
     fn is_valid_label(s: &str) -> bool {
@@ -102,6 +117,17 @@ mod tests {
         assert!(matches!(Visibility::from_label("personal").unwrap(), Visibility::Personal));
         assert!(matches!(Visibility::from_label("private").unwrap(), Visibility::Private));
         assert!(matches!(Visibility::from_label("org").unwrap(), Visibility::Org));
+        assert!(matches!(Visibility::from_label("team").unwrap(), Visibility::Team));
+    }
+
+    #[test]
+    fn team_round_trips() {
+        let v = Visibility::from_label("team").unwrap();
+        assert_eq!(v.as_label(), "team");
+        assert!(v.is_team());
+        assert!(!v.is_org());
+        assert!(!v.is_private());
+        assert!(matches!(v, Visibility::Team));
     }
 
     #[test]

@@ -314,6 +314,104 @@ pub async fn org_invite(
     .map_err(err)
 }
 
+// ---------- /v1/orgs/:id/logo (Slice 2) ----------
+
+/// Wire shape used by the desktop UI to render an uploaded logo.
+/// Bytes are base64'd here so React can stuff them into a data URL.
+#[derive(Debug, serde::Serialize)]
+pub struct LogoData {
+    pub data_url: String,
+    pub content_type: String,
+    pub etag: Option<String>,
+}
+
+#[tauri::command]
+pub async fn org_logo_get(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    org_id: Uuid,
+) -> Result<Option<LogoData>, String> {
+    use base64::Engine;
+    let c = server_creds(&state, &workspace_id).await?;
+    match orgs::org_logo_get(&c.server_url, &c.session_token, org_id).await {
+        Ok(logo) => {
+            let b64 =
+                base64::engine::general_purpose::STANDARD.encode(&logo.bytes);
+            Ok(Some(LogoData {
+                data_url: format!("data:{};base64,{b64}", logo.content_type),
+                content_type: logo.content_type,
+                etag: logo.etag,
+            }))
+        }
+        // 404 is "no logo set yet" — surface as None rather than an
+        // error so the UI doesn't have to special-case the message.
+        Err(orchext_sync::SyncError::NotFound) => Ok(None),
+        Err(e) => Err(err(e)),
+    }
+}
+
+/// Upload a logo from a path on disk. The frontend reads the file
+/// via `tauri-plugin-dialog`'s open picker, hands the path here, and
+/// we read + post the bytes. Multipart needs `bytes`, not `File`,
+/// when crossing the IPC boundary.
+#[tauri::command]
+pub async fn org_logo_upload(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    org_id: Uuid,
+    path: String,
+) -> Result<orgs::LogoUploadResponse, String> {
+    let c = server_creds(&state, &workspace_id).await?;
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|e| format!("read {path}: {e}"))?;
+    let filename = std::path::Path::new(&path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("logo")
+        .to_string();
+    // The server sniffs magic bytes — we pass the file's extension as
+    // an informational hint on the multipart part's Content-Type.
+    let mime = mime_for_extension(&filename);
+    orgs::org_logo_upload(
+        &c.server_url,
+        &c.session_token,
+        org_id,
+        bytes,
+        &filename,
+        mime,
+    )
+    .await
+    .map_err(err)
+}
+
+#[tauri::command]
+pub async fn org_logo_delete(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    org_id: Uuid,
+) -> Result<(), String> {
+    let c = server_creds(&state, &workspace_id).await?;
+    orgs::org_logo_delete(&c.server_url, &c.session_token, org_id)
+        .await
+        .map_err(err)
+}
+
+fn mime_for_extension(filename: &str) -> Option<&'static str> {
+    let lower = filename.to_ascii_lowercase();
+    if lower.ends_with(".png") {
+        Some("image/png")
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        Some("image/jpeg")
+    } else if lower.ends_with(".gif") {
+        Some("image/gif")
+    } else if lower.ends_with(".webp") {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
 #[tauri::command]
 pub async fn org_invitation_delete(
     state: State<'_, AppState>,

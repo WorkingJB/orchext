@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Membership } from "./api";
+import { Context } from "./OrgRail";
 import { DocumentsView } from "./DocumentsView";
 import { ProposalsView } from "./ProposalsView";
 
@@ -15,10 +16,12 @@ type SubTab = "documents" | "proposals";
 /// proposals.
 export function DocumentsTab({
   tenant,
+  ctx,
   proposalsFocus,
   onSetProposalsFocus,
 }: {
   tenant: Membership;
+  ctx?: Context;
   proposalsFocus: string | null;
   onSetProposalsFocus: (docId: string | null) => void;
 }) {
@@ -60,6 +63,7 @@ export function DocumentsTab({
         {subtab === "documents" && (
           <DocumentsView
             tenant={tenant}
+            ctx={ctx}
             onSwitchToProposals={(docId) => {
               onSetProposalsFocus(docId);
             }}

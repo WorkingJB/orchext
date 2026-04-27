@@ -1,14 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiFailure, Organization } from "./api";
 import { Context } from "./OrgRail";
 
-/// Org settings pane (Phase 3 platform Slice 1). Admin/owner only —
-/// gated by App.tsx.
+/// Org settings pane (Phase 3 platform Slice 1; logo upload added in
+/// Slice 2). Admin/owner only — gated by App.tsx.
 ///
 /// `allowed_domains` is rendered read-only with a "available when
 /// email infra ships" note, per D17e: the column lands in the schema
 /// now but the auto-join code path won't fire until SMTP + email
 /// verification are wired.
+///
+/// Logo: uploaded as a file (PNG / JPEG / GIF / WEBP, ≤ 512KB) and
+/// served from `/v1/orgs/:id/logo`. Slice 1's external-URL field is
+/// gone — external references didn't render reliably and the bytes-
+/// in-Postgres path is simpler.
 export function OrgSettingsView({
   ctx,
   onUpdated,
@@ -18,10 +23,13 @@ export function OrgSettingsView({
 }) {
   const [org, setOrg] = useState<Organization | null>(null);
   const [name, setName] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [logoBusy, setLogoBusy] = useState<"uploading" | "removing" | null>(
+    null
+  );
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +41,6 @@ export function OrgSettingsView({
         if (cancelled) return;
         setOrg(o);
         setName(o.name);
-        setLogoUrl(o.logo_url ?? "");
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof ApiFailure ? e.message : String(e));
@@ -56,7 +63,6 @@ export function OrgSettingsView({
     try {
       const updated = await api.orgUpdate(org.id, {
         name: trimmedName,
-        logo_url: logoUrl.trim() === "" ? null : logoUrl.trim(),
       });
       setOrg(updated);
       setSavedAt(Date.now());
@@ -65,6 +71,40 @@ export function OrgSettingsView({
       setError(e instanceof ApiFailure ? e.message : String(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function uploadLogo(file: File) {
+    if (!org) return;
+    setLogoBusy("uploading");
+    setError(null);
+    try {
+      const result = await api.orgLogoUpload(org.id, file);
+      const updated = { ...org, logo_url: result.logo_url };
+      setOrg(updated);
+      onUpdated(updated);
+    } catch (e) {
+      setError(e instanceof ApiFailure ? e.message : String(e));
+    } finally {
+      setLogoBusy(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function removeLogo() {
+    if (!org) return;
+    if (!confirm("Remove the organization logo?")) return;
+    setLogoBusy("removing");
+    setError(null);
+    try {
+      await api.orgLogoDelete(org.id);
+      const updated = { ...org, logo_url: null };
+      setOrg(updated);
+      onUpdated(updated);
+    } catch (e) {
+      setError(e instanceof ApiFailure ? e.message : String(e));
+    } finally {
+      setLogoBusy(null);
     }
   }
 
@@ -104,17 +144,48 @@ export function OrgSettingsView({
               />
             </Field>
 
-            <Field label="Logo URL">
-              <input
-                type="url"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://example.com/logo.png"
-                className="w-full border border-neutral-300 rounded px-3 py-2 text-sm"
-                disabled={busy}
-              />
-              <p className="text-xs text-neutral-500 mt-1">
-                Shown as the org&apos;s avatar in the left rail.
+            <Field label="Logo">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-md border border-neutral-200 bg-neutral-50 overflow-hidden flex items-center justify-center text-xs text-neutral-400">
+                  {org.logo_url ? (
+                    <img
+                      src={org.logo_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void uploadLogo(file);
+                    }}
+                    disabled={logoBusy !== null}
+                    className="text-xs"
+                  />
+                  {org.logo_url && (
+                    <button
+                      type="button"
+                      onClick={removeLogo}
+                      disabled={logoBusy !== null}
+                      className="text-xs text-red-700 hover:underline self-start disabled:opacity-50"
+                    >
+                      Remove logo
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-neutral-500 mt-2">
+                PNG, JPEG, GIF, or WEBP up to 512KB. Shown as the
+                org&apos;s avatar in the left rail.
+                {logoBusy === "uploading" && " Uploading…"}
+                {logoBusy === "removing" && " Removing…"}
               </p>
             </Field>
 

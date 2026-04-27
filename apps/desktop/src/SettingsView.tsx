@@ -5,8 +5,9 @@ import { TokensView } from "./TokensView";
 import { AuditView } from "./AuditView";
 import { MembersView } from "./MembersView";
 import { OrgSettingsView } from "./OrgSettingsView";
+import { TeamsView } from "./TeamsView";
 
-type Tab = "members" | "org" | "tokens" | "audit";
+type Tab = "members" | "teams" | "org" | "tokens" | "audit";
 
 /// Settings hub. Wraps the per-feature views under a single top-level
 /// nav slot so the right-side nav stays sparse (Docs / Settings).
@@ -36,6 +37,11 @@ export function SettingsView({
     const tabs: Tab[] = [];
     if (isOrg && isAdmin) {
       tabs.push("members");
+    }
+    if (isOrg) {
+      tabs.push("teams");
+    }
+    if (isOrg && isAdmin) {
       tabs.push("org");
     }
     tabs.push("tokens");
@@ -69,6 +75,9 @@ export function SettingsView({
         {tab === "members" && isOrg && (
           <MembersView ctx={ctx as Context & { kind: "org" }} />
         )}
+        {tab === "teams" && isOrg && (
+          <TeamsView ctx={ctx as Context & { kind: "org" }} />
+        )}
         {tab === "org" && isOrg && (
           <OrgSettingsView
             ctx={ctx as Context & { kind: "org" }}
@@ -86,6 +95,7 @@ export function SettingsView({
 
 const LABELS: Record<Tab, string> = {
   members: "Members",
+  teams: "Teams",
   org: "Organization",
   tokens: "Tokens",
   audit: "Audit",

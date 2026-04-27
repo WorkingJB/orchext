@@ -43,6 +43,20 @@ impl RemoteVaultDriver {
         doc: &Document,
         base_version: Option<&str>,
     ) -> Result<WriteResponse> {
+        self.write_versioned_with_team(id, doc, base_version, None)
+            .await
+    }
+
+    /// Like `write_versioned`, but also pins the doc's team binding
+    /// (Phase 3 platform Slice 2). The server enforces strict coupling
+    /// — `team_id` must be `Some` iff `frontmatter.visibility == "team"`.
+    pub async fn write_versioned_with_team(
+        &self,
+        id: &DocumentId,
+        doc: &Document,
+        base_version: Option<&str>,
+        team_id: Option<uuid::Uuid>,
+    ) -> Result<WriteResponse> {
         if doc.frontmatter.id != *id {
             return Err(SyncError::InvalidArgument(format!(
                 "frontmatter id {:?} does not match write id {:?}",
@@ -60,10 +74,32 @@ impl RemoteVaultDriver {
         let body = WriteRequest {
             source,
             base_version: base_version.map(str::to_string),
+            team_id,
         };
         self.client
             .request_json::<_, WriteResponse>(Method::PUT, url, Some(&body))
             .await
+    }
+
+    /// Read a doc and surface its server-side team binding alongside
+    /// the parsed `Document`. Mirrors the trait `read` shape but adds
+    /// the team_id needed by the desktop's editor to pre-fill the
+    /// team picker on existing team docs.
+    pub async fn read_with_team_id(
+        &self,
+        id: &DocumentId,
+    ) -> Result<(Document, Option<uuid::Uuid>)> {
+        let url = self
+            .client
+            .config
+            .tenant_url(&format!("vault/docs/{id}"))?;
+        let resp: DocResponse = self
+            .client
+            .request_json::<(), _>(Method::GET, url, None)
+            .await?;
+        let doc = Document::parse(&resp.source)
+            .map_err(|e| SyncError::Document(e.to_string()))?;
+        Ok((doc, resp.team_id))
     }
 
     /// Delete with an optional base-version precondition.
@@ -90,6 +126,11 @@ struct WriteRequest {
     source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     base_version: Option<String>,
+    /// Team binding for `visibility = 'team'` docs. Required when the
+    /// frontmatter's visibility is `team`; rejected otherwise. The DB
+    /// CHECK constraint backs the same coupling on the server.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_id: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -99,6 +140,8 @@ pub struct WriteResponse {
     pub visibility: String,
     pub version: String,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub team_id: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,10 +159,14 @@ struct ListEntryDto {
 }
 
 /// Same shape principle as `ListEntryDto` — only `source` is consumed
-/// downstream (parsed by `Document::parse`).
+/// by the trait `read` path. `team_id` is surfaced via
+/// `read_with_team_id` for callers that need it (the desktop's
+/// doc_read command, which propagates it to the team picker).
 #[derive(Debug, Deserialize)]
 struct DocResponse {
     source: String,
+    #[serde(default)]
+    team_id: Option<uuid::Uuid>,
 }
 
 // ---------- VaultDriver impl ----------

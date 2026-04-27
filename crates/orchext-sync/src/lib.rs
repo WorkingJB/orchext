@@ -26,15 +26,20 @@ pub mod error;
 pub mod orgs;
 pub mod proposals;
 pub mod session;
+pub mod teams;
 
 pub use client::{RemoteClient, RemoteConfig};
 pub use crypto::{CryptoState, InitCryptoResponse, PublishResponse};
 pub use driver::{RemoteVaultDriver, WriteResponse};
 pub use error::{Result, SyncError};
 pub use orgs::{
-    AccountInfo, Invitation, InvitationsResponse, MeResponse, MemberDetail,
-    MembersResponse, OrgMembership, Organization, OrgsListResponse, PendingDetail,
-    PendingResponse, PendingSignup, UpdateOrgInput,
+    AccountInfo, Invitation, InvitationsResponse, LogoBytes, LogoUploadResponse,
+    MeResponse, MemberDetail, MembersResponse, OrgMembership, Organization,
+    OrgsListResponse, PendingDetail, PendingResponse, PendingSignup, UpdateOrgInput,
+};
+pub use teams::{
+    Team, TeamMemberDetail, TeamMembersResponse, TeamSummary, TeamsListResponse,
+    UpdateTeamInput,
 };
 pub use proposals::{ApproveResponse as ProposalApproveResponse, ListResponse as ProposalListResponse, Proposal};
 pub use session::{list_tenants, login, Account, LoginInput, LoginOutcome, SessionIssued, Tenant};

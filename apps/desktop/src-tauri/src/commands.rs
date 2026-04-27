@@ -640,6 +640,11 @@ pub struct DocDetail {
     pub updated: Option<String>,
     pub body: String,
     pub version: String,
+    /// Server-side team binding for `visibility = 'team'` docs (Phase
+    /// 3 platform Slice 2). Always `None` for local workspaces — team
+    /// docs only exist on remote vaults.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -657,6 +662,11 @@ pub struct DocInput {
     #[serde(default)]
     pub source: Option<String>,
     pub body: String,
+    /// Required when `visibility == "team"`. Ignored otherwise (the
+    /// server rejects the combo with InvalidArgument so the UI surfaces
+    /// it). Always ignored for local workspaces.
+    #[serde(default)]
+    pub team_id: Option<uuid::Uuid>,
 }
 
 #[tauri::command]
@@ -706,11 +716,28 @@ pub async fn doc_read(
 ) -> Result<DocDetail, String> {
     let svcs = state.active_services().await?;
     let doc_id = DocumentId::new(id).map_err(|e| e.to_string())?;
-    let doc = svcs
-        .vault
-        .read(&doc_id)
-        .await
-        .map_err(|e| format!("read: {e}"))?;
+    // Remote workspaces fetch via the team-aware path so the doc
+    // editor can pre-fill the team picker on existing team docs.
+    // Local workspaces have no team concept — drop straight to
+    // `vault.read`.
+    let (doc, team_id) = if svcs.is_remote() {
+        let client = svcs
+            .remote_client
+            .as_ref()
+            .ok_or_else(|| "remote workspace missing client".to_string())?;
+        let driver = orchext_sync::RemoteVaultDriver::new((**client).clone());
+        driver
+            .read_with_team_id(&doc_id)
+            .await
+            .map_err(|e| format!("read: {e}"))?
+    } else {
+        let doc = svcs
+            .vault
+            .read(&doc_id)
+            .await
+            .map_err(|e| format!("read: {e}"))?;
+        (doc, None)
+    };
     let version = doc.version().map_err(|e| e.to_string())?;
     Ok(DocDetail {
         id: doc.frontmatter.id.to_string(),
@@ -724,6 +751,7 @@ pub async fn doc_read(
         updated: doc.frontmatter.updated.map(|d| d.to_string()),
         body: doc.body,
         version,
+        team_id: team_id.map(|u| u.to_string()),
     })
 }
 
@@ -764,10 +792,27 @@ pub async fn doc_write(
         frontmatter: fm,
         body: input.body,
     };
-    svcs.vault
-        .write(&id, &doc)
-        .await
-        .map_err(|e| format!("write: {e}"))?;
+    // Team-aware write for remote workspaces so the server's strict
+    // visibility=team ⇔ team_id coupling can be honored from the
+    // desktop. The trait `write` path doesn't carry team_id.
+    let returned_team_id: Option<uuid::Uuid> = if svcs.is_remote() {
+        let client = svcs
+            .remote_client
+            .as_ref()
+            .ok_or_else(|| "remote workspace missing client".to_string())?;
+        let driver = orchext_sync::RemoteVaultDriver::new((**client).clone());
+        let resp = driver
+            .write_versioned_with_team(&id, &doc, None, input.team_id)
+            .await
+            .map_err(|e| format!("write: {e}"))?;
+        resp.team_id
+    } else {
+        svcs.vault
+            .write(&id, &doc)
+            .await
+            .map_err(|e| format!("write: {e}"))?;
+        None
+    };
     svcs.index
         .upsert(&input.type_, &doc)
         .await
@@ -786,6 +831,7 @@ pub async fn doc_write(
         updated: doc.frontmatter.updated.map(|d| d.to_string()),
         body: doc.body,
         version,
+        team_id: returned_team_id.map(|u| u.to_string()),
     })
 }
 

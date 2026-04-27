@@ -25,6 +25,12 @@ export type Context =
       orgId: string;
       name: string;
       logoUrl: string | null;
+      /// Data URL for the org's logo bytes, fetched via the
+      /// `org_logo_get` Tauri command. The desktop can't render
+      /// `logoUrl` directly because the browser context has no
+      /// auth path back to the server — we hydrate to a data URL
+      /// instead. `null` while loading or when no logo is set.
+      logoData: string | null;
       role: OrgMembership["role"];
     };
 
@@ -75,6 +81,7 @@ export function buildContexts(
         orgId: orgMembership.org_id,
         name: orgMembership.name,
         logoUrl: orgMembership.logo_url,
+        logoData: null,
         role: orgMembership.role,
       });
     } else {
@@ -158,9 +165,9 @@ function ContextBadge({
           : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200")
       }
     >
-      {ctx.kind === "org" && ctx.logoUrl ? (
+      {ctx.kind === "org" && ctx.logoData ? (
         <img
-          src={ctx.logoUrl}
+          src={ctx.logoData}
           alt=""
           className="w-7 h-7 rounded object-cover"
         />

@@ -51,6 +51,24 @@ export default function App() {
 
     const contexts = buildContexts(workspaces, orgsByServer);
 
+    // Hydrate org logo data URLs in parallel. Failures are non-fatal
+    // — the rail falls back to initials if the fetch flops.
+    await Promise.all(
+      contexts
+        .filter(
+          (c): c is Context & { kind: "org" } =>
+            c.kind === "org" && c.logoUrl !== null
+        )
+        .map(async (c) => {
+          try {
+            const logo = await api.orgLogoGet(c.workspaceId, c.orgId);
+            c.logoData = logo?.data_url ?? null;
+          } catch {
+            c.logoData = null;
+          }
+        })
+    );
+
     // Open / refresh the active vault. `vault_info` auto-opens the
     // active registered workspace if one exists.
     const activeVault = await api.vaultInfo();

@@ -210,37 +210,118 @@ keychain stays on Slice 4.
   (`org_editor` in role enum + scope mapping), `apps/desktop`,
   `apps/web`.
 
-### Slice 2 — Teams
+### Slice 2 — Teams — **shipped 2026-04-27**
 *([Notion](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33))*
 
+**Status:** server, web, and desktop all closed 2026-04-27, alongside
+a related logo-upload fix that replaces Slice 1's external-URL field
+with a server-hosted multipart upload (see "logo upload" below).
+
+**Cuts realized:** No FORMAT.md change — `visibility: team` is a
+parser-recognized variant, but the team identity (`team_id`) lives
+server-side as row metadata, not in frontmatter. Local vaults reject
+team docs because the server isn't there to bind them.
+
 - **Server**
-  - New `teams` table: id, org_id, name, slug, created_at.
-  - New `team_memberships` table: team_id, account_id, role
-    ∈ {`manager`, `member`}, created_at.
-  - New `team_id` column on `documents` (nullable; null = org-
-    scoped, non-null = team-scoped).
-  - `POST /v1/orgs/:org_id/teams` — create (admin/owner).
-  - `GET /v1/orgs/:org_id/teams` — list (members see teams
-    they're in + a public team list).
-  - `PATCH /v1/orgs/:org_id/teams/:team_id` — rename
-    (admin/owner or team manager).
-  - `DELETE /v1/orgs/:org_id/teams/:team_id` — delete
-    (admin/owner).
-  - `POST /v1/orgs/:org_id/teams/:team_id/members`,
-    `DELETE …/:account_id` — add / remove (admin/owner or team
-    manager for own team).
-  - Visibility filter: `visibility: team` doc + `team_id = X`
-    means readable only by `team_memberships` for team X
-    (admin/owner of the org also pass — see D11).
-- **Desktop + web**
-  - Teams list pane.
-  - Per-team page: members, team-context docs, manager
-    controls.
-  - Team picker on document creation (default = org-scoped or
-    private).
-- **Crates touched:** `orchext-server`, `orchext-vault` (any
-  team seed types if added), `orchext-auth` (team-role-derived
-  scopes), `apps/desktop`, `apps/web`.
+  - Migration `0010_teams.sql`: `teams` (id, org_id, name, slug,
+    created_at; UNIQUE(org_id, slug)), `team_memberships`
+    (team_id, account_id, role ∈ {`manager`, `member`},
+    created_at; PK), and `documents.team_id` nullable FK with a
+    CHECK constraint pinning strict coupling
+    `team_id IS NOT NULL ⟺ visibility = 'team'`.
+  - `POST/GET /v1/orgs/:org_id/teams` — create (admin/owner) /
+    list (any org member; rows include `member_count` and the
+    viewer's team role for sidebar UX).
+  - `GET/PATCH/DELETE /v1/orgs/:org_id/teams/:team_id` — read
+    (any org member), rename (admin/owner OR team manager),
+    delete (admin/owner).
+  - `GET /v1/orgs/:org_id/teams/:team_id/members`,
+    `POST/PATCH/DELETE …/members[/:account_id]` — list (any org
+    member), add/role-change/remove (admin/owner OR team manager
+    for own team). Adding a non-org-member is rejected with 409
+    so team membership can't back-door org membership.
+  - Visibility filter: `documents.rs` list / read / count and
+    `mcp.rs` search / get / list / propose / resources/* now
+    filter team docs by membership of the *issuing* account
+    (session for HTTP, `token.issued_by` for MCP). Org admins/
+    owners pass without a team membership for the HTTP path
+    (per D11); MCP tokens are deliberately narrower — they
+    require a team_memberships row.
+  - Write/delete gates on team docs: org admin/owner OR team
+    manager. Plain team members can read but not author team
+    docs (parallels the org_editor split).
+  - `WriteRequest` accepts `team_id: Option<Uuid>` alongside
+    `source` + `base_version`; rejects the combo with strict
+    coupling errors (no `team_id` for non-team visibility, no
+    missing `team_id` for visibility=team, team must belong to
+    the org tenant).
+- **Logo upload — Slice 2 follow-on**
+  - Migration `0011_org_logos.sql`: `org_logos` (org_id PK,
+    content_type, bytes BYTEA, sha256, updated_at).
+  - `POST /v1/orgs/:org_id/logo` — multipart upload
+    (admin/owner; 512KB cap; magic-byte sniff validates PNG /
+    JPEG / GIF / WEBP and rejects everything else, including
+    SVG to dodge an XSS surface). On success, sets
+    `organizations.logo_url` to `/v1/orgs/:org_id/logo?v=<sha[:16]>`
+    so cache busts on re-upload.
+  - `GET /v1/orgs/:org_id/logo` — bytes + ETag based on sha256;
+    returns 304 on `If-None-Match` match. Cookie-authed for
+    web's `<img src>`; bearer-authed for desktop (see below).
+  - `DELETE /v1/orgs/:org_id/logo` — admin/owner; clears row +
+    nulls `logo_url`.
+- **`orchext-sync`**
+  - New `crates/orchext-sync/src/teams.rs` mirroring `orgs.rs`:
+    bearer-authed wrappers + DTOs for the team CRUD + member
+    surfaces.
+  - `orgs.rs` adds `org_logo_get / _upload / _delete` (multipart
+    via `reqwest::multipart`).
+  - `RemoteVaultDriver` gains `write_versioned_with_team` and
+    `read_with_team_id` so the desktop's `doc_write` /
+    `doc_read` commands can plumb `team_id` through to the
+    server without breaking the trait surface.
+- **Web** (`apps/web`)
+  - New `TeamsView.tsx`: Slack-style two-pane (list left, detail
+    right). Visible to every org member; admin-only "+ New" /
+    delete; team-manager-or-admin add/remove/rename for the
+    selected team's roster.
+  - `OrgSettingsView.tsx`: text-input → file picker (ref-mounted
+    `<input type="file">`) + 14×14 preview + remove button. Uses
+    cookie-authed `<img src>` against `/v1/orgs/:id/logo`.
+  - `DocumentsView.tsx`: visibility dropdown gains `team` when
+    the viewer can write any team doc; team picker appears
+    inline when visibility=team and defaults to the viewer's
+    first writable team. `audienceCopy` and `VisibilityChip`
+    learn the new variant.
+- **Desktop** (`apps/desktop`)
+  - New `apps/desktop/src-tauri/src/teams.rs` Tauri commands +
+    `org_logo_get / _upload / _delete` in `orgs.rs`.
+  - `commands::doc_write` / `doc_read` branch on remote
+    workspaces and route via `RemoteVaultDriver`'s team-aware
+    methods so `team_id` survives the trait boundary. Local
+    vaults silently drop `team_id` (no team concept on disk).
+  - `OrgSettingsView.tsx`: `tauri-plugin-dialog`'s `open()`
+    picks a file; bytes flow to the server via the
+    `org_logo_upload` command; the rail re-fetches the data URL
+    via `org_logo_get` and stuffs it into Context as a base64
+    data URL (the desktop browser context can't bearer-auth
+    `<img src>`).
+  - `App.tsx` hydrates `Context.logoData` after `buildContexts`
+    so `OrgRail` renders an actual logo, not a 401 fallback.
+  - `TeamsView.tsx` + `SettingsView.tsx` parity with the web.
+- **Crates touched:** `orchext-server` (migrations, teams.rs,
+  org_logo.rs, documents.rs visibility extension, mcp.rs filter
+  extension, idx.rs filter extension), `orchext-vault`
+  (Visibility::Team variant), `orchext-sync` (teams.rs +
+  RemoteVaultDriver team-aware methods), `apps/web`,
+  `apps/desktop`.
+
+**Tests:** 11 new integration tests in
+`crates/orchext-server/tests/teams_flow.rs` cover team CRUD, role
+gates, visibility filter (member sees / non-member denied / admin
+sees), strict `team_id ⇔ visibility=team` coupling, and logo upload
+(content-type sniff, member-cannot-upload, ETag round-trip). +1 unit
+test on `Visibility::Team` round-trip and +1 on `derive_slug` in
+`teams.rs`.
 
 ### Slice 3 — Web onboarding chat
 *([Notion](https://www.notion.so/34d47fdae49a81d6a012e90cbbcb0d0b))*

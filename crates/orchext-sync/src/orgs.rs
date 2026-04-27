@@ -396,6 +396,106 @@ pub async fn org_invite(
     .await
 }
 
+// ---------- /v1/orgs/:id/logo (Phase 3 platform Slice 2) ----------
+
+/// Bytes + mime returned by `org_logo_get`. `None` is encoded as a
+/// 404 from the server.
+#[derive(Debug, Clone)]
+pub struct LogoBytes {
+    pub bytes: Vec<u8>,
+    pub content_type: String,
+    pub etag: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LogoUploadResponse {
+    pub logo_url: String,
+    pub content_type: String,
+    pub sha256: String,
+    pub bytes: usize,
+}
+
+pub async fn org_logo_get(
+    server_url: &Url,
+    token: &str,
+    org_id: Uuid,
+) -> Result<LogoBytes> {
+    let resp = reqwest::Client::new()
+        .request(
+            Method::GET,
+            server_url.join(&format!("v1/orgs/{org_id}/logo"))?,
+        )
+        .bearer_auth(token)
+        .send()
+        .await?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(translate_error(status, resp).await);
+    }
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+    let etag = resp
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let bytes = resp.bytes().await?.to_vec();
+    Ok(LogoBytes {
+        bytes,
+        content_type,
+        etag,
+    })
+}
+
+pub async fn org_logo_upload(
+    server_url: &Url,
+    token: &str,
+    org_id: Uuid,
+    bytes: Vec<u8>,
+    filename: &str,
+    mime: Option<&str>,
+) -> Result<LogoUploadResponse> {
+    let part_mime = mime.unwrap_or("application/octet-stream");
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name(filename.to_string())
+        .mime_str(part_mime)
+        .map_err(|e| {
+            crate::error::SyncError::InvalidArgument(format!("invalid mime: {e}"))
+        })?;
+    let form = reqwest::multipart::Form::new().part("file", part);
+    let resp = reqwest::Client::new()
+        .request(
+            Method::POST,
+            server_url.join(&format!("v1/orgs/{org_id}/logo"))?,
+        )
+        .bearer_auth(token)
+        .multipart(form)
+        .send()
+        .await?;
+    let status = resp.status();
+    if status.is_success() {
+        Ok(resp.json().await?)
+    } else {
+        Err(translate_error(status, resp).await)
+    }
+}
+
+pub async fn org_logo_delete(
+    server_url: &Url,
+    token: &str,
+    org_id: Uuid,
+) -> Result<()> {
+    delete_no_body(
+        server_url.join(&format!("v1/orgs/{org_id}/logo"))?,
+        token,
+    )
+    .await
+}
+
 pub async fn org_invitation_delete(
     server_url: &Url,
     token: &str,

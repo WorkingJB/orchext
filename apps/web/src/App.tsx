@@ -355,6 +355,7 @@ function MainApp() {
           {workspace.kind === "ready" && view === "documents" && (
             <DocumentsTab
               tenant={contextToMembership(active)}
+              ctx={active}
               proposalsFocus={proposalsFocus}
               onSetProposalsFocus={setProposalsFocus}
             />

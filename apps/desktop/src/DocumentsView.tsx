@@ -7,6 +7,7 @@ import {
   PERSONAL_VISIBILITIES,
   Proposal,
   SEED_TYPES,
+  TeamSummary,
 } from "./api";
 import { Context } from "./OrgRail";
 import { RichTextEditor } from "./RichTextEditor";
@@ -34,6 +35,9 @@ export function DocumentsView({
   const [detail, setDetail] = useState<DocDetail | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Teams visible to the viewer in this org (empty otherwise). Drives
+  // the visibility=team option and team picker in the doc editor.
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
   /// Pending-proposal count keyed by doc_id for the inline banner.
   /// Refreshed alongside the doc list so approvals from a Proposals
   /// session reflect immediately on return.
@@ -73,6 +77,25 @@ export function DocumentsView({
     void refreshList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.workspaceId]);
+
+  useEffect(() => {
+    if (ctx.kind !== "org") {
+      setTeams([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .teamsList(ctx.workspaceId, ctx.orgId)
+      .then((r) => {
+        if (!cancelled) setTeams(r.teams);
+      })
+      .catch(() => {
+        if (!cancelled) setTeams([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ctx]);
 
   // Refresh the list whenever the watcher (local vault) sees a change
   // under the vault root. Remote workspaces still get explicit refresh
@@ -247,6 +270,8 @@ export function DocumentsView({
             key={`__new__:${typeFilter ?? ""}:${defaultVisibilityForNew}`}
             ctxKind={ctx.kind}
             ctxName={ctxName}
+            ctxRole={ctx.kind === "org" ? ctx.role : "owner"}
+            teams={teams}
             initial={null}
             defaultType={typeFilter ?? undefined}
             defaultVisibility={defaultVisibilityForNew}
@@ -273,6 +298,8 @@ export function DocumentsView({
               key={`${detail.id}@${detail.version}`}
               ctxKind={ctx.kind}
               ctxName={ctxName}
+              ctxRole={ctx.kind === "org" ? ctx.role : "owner"}
+              teams={teams}
               initial={detail}
               onSaved={async (d) => {
                 await refreshList();
@@ -366,6 +393,8 @@ function VisibilityChip({ v }: { v: string }) {
       ? "bg-green-100 text-green-700"
       : v === "org"
       ? "bg-violet-100 text-violet-700"
+      : v === "team"
+      ? "bg-indigo-100 text-indigo-700"
       : "bg-neutral-100 text-neutral-700";
   return (
     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${color}`}>
@@ -377,6 +406,8 @@ function VisibilityChip({ v }: { v: string }) {
 function DocEditor({
   ctxKind,
   ctxName,
+  ctxRole,
+  teams,
   initial,
   defaultType,
   defaultVisibility,
@@ -386,6 +417,8 @@ function DocEditor({
 }: {
   ctxKind: Context["kind"];
   ctxName: string;
+  ctxRole: string;
+  teams: TeamSummary[];
   initial: DocDetail | null;
   /// When creating a new doc, pre-fill the type field with this
   /// (typically the active type filter — so a user clicking "+ New"
@@ -399,12 +432,22 @@ function DocEditor({
   onCancel?: () => void;
 }) {
   const isOrg = ctxKind === "org";
+  const isOrgAdmin = isOrg && (ctxRole === "owner" || ctxRole === "admin");
+  /// Teams the viewer can WRITE to. Org admins can write any; other
+  /// roles must be team managers. Drives whether `team` shows up in
+  /// the visibility dropdown for new docs.
+  const writableTeams = useMemo(() => {
+    if (!isOrg) return [];
+    if (isOrgAdmin) return teams;
+    return teams.filter((t) => t.viewer_role === "manager");
+  }, [isOrg, isOrgAdmin, teams]);
   /// Visibility set per context (Phase 3 platform 4-layer model).
   /// Local + personal vaults offer the personal set; org workspaces
-  /// offer org+private. The visibility dropdown unions the allowed
-  /// set with the doc's current value so legacy values render.
+  /// offer org+private (+team when the viewer can write a team doc).
   const allowedVisibilities: readonly string[] = isOrg
-    ? ORG_VISIBILITIES
+    ? writableTeams.length > 0
+      ? ORG_VISIBILITIES
+      : ORG_VISIBILITIES.filter((v) => v !== "team")
     : PERSONAL_VISIBILITIES;
   const isNew = initial === null;
   // Split the stored body into a leading H1 (the doc's title) and the
@@ -421,6 +464,9 @@ function DocEditor({
   const [type, setType] = useState(initial?.type ?? defaultType ?? "");
   const [visibility, setVisibility] = useState(
     initial?.visibility ?? defaultVisibility ?? "private"
+  );
+  const [teamId, setTeamId] = useState<string | null>(
+    initial?.team_id ?? (writableTeams[0]?.id ?? null)
   );
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
   const [title, setTitle] = useState(isNew ? "" : split.title);
@@ -454,6 +500,19 @@ function DocEditor({
     setId(slugify(title));
   }, [title, isNew, idTouched]);
 
+  // Keep team_id in sync with visibility — clear when leaving `team`,
+  // default to the first writable team when entering it.
+  useEffect(() => {
+    if (visibility === "team") {
+      if (teamId === null && writableTeams.length > 0) {
+        setTeamId(writableTeams[0].id);
+      }
+    } else if (teamId !== null) {
+      setTeamId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibility]);
+
   useEffect(() => {
     if (savedAt === null) return;
     const t = setTimeout(() => setSavedAt(null), 1800);
@@ -471,6 +530,9 @@ function DocEditor({
         .map((t) => t.trim())
         .filter(Boolean);
       const combinedBody = combineTitleAndBody(title, body);
+      if (visibility === "team" && !teamId) {
+        throw new Error("Pick a team for visibility=team docs.");
+      }
       const saved = await api.docWrite({
         id: trimmedId,
         type: trimmedType,
@@ -480,6 +542,7 @@ function DocEditor({
         // is no longer surfaced; don't silently strip it).
         source: initial?.source ?? null,
         body: combinedBody,
+        team_id: visibility === "team" ? teamId : null,
       });
       setSavedAt(Date.now());
       await onSaved(saved);
@@ -603,9 +666,37 @@ function DocEditor({
             ))}
           </select>
           <p className="text-xs text-neutral-500 mt-1">
-            {audienceCopy(visibility, isOrg, ctxName)}
+            {audienceCopy(visibility, isOrg, ctxName, teamId, teams)}
           </p>
         </Field>
+        {visibility === "team" && (
+          <Field label="Team">
+            <select
+              value={teamId ?? ""}
+              onChange={(e) => setTeamId(e.target.value || null)}
+              className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
+            >
+              {!teamId && (
+                <option value="" disabled>
+                  Select a team…
+                </option>
+              )}
+              {(isNew
+                ? writableTeams
+                : teams.filter(
+                    (t) =>
+                      isOrgAdmin ||
+                      t.viewer_role === "manager" ||
+                      t.id === teamId
+                  )
+              ).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Tags (comma-separated)">
           <input
             value={tags}
@@ -687,7 +778,9 @@ function combineTitleAndBody(title: string, body: string): string {
 function audienceCopy(
   visibility: string,
   isOrg: boolean,
-  ctxName: string
+  ctxName: string,
+  teamId: string | null,
+  teams: TeamSummary[]
 ): string {
   switch (visibility) {
     case "private":
@@ -696,6 +789,12 @@ function audienceCopy(
         : "Only you. Stays in your personal vault.";
     case "org":
       return `All members of ${ctxName} can read this.`;
+    case "team": {
+      const t = teams.find((t) => t.id === teamId);
+      return t
+        ? `Members of the ${t.name} team (and ${ctxName} admins) can read this.`
+        : "Pick a team — only its members can read.";
+    }
     case "personal":
       return "Only you. Tagged as personal-life context.";
     case "work":

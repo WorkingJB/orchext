@@ -54,6 +54,11 @@ pub struct ListEntry {
     pub title: String,
     pub updated: Option<NaiveDate>,
     pub tags: Vec<String>,
+    /// Team binding for `visibility = 'team'` docs (Phase 3 platform
+    /// Slice 2). `None` for org / personal / public / private rows.
+    /// The DB CHECK constraint pins the strict coupling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -75,6 +80,8 @@ struct DocResponse {
     version: String,
     updated_at: DateTime<Utc>,
     source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -84,6 +91,8 @@ struct WriteResponse {
     visibility: String,
     version: String,
     updated_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,6 +104,13 @@ struct WriteRequest {
     /// without a precondition.
     #[serde(default)]
     base_version: Option<String>,
+    /// Team this doc belongs to. Required when the parsed
+    /// frontmatter's `visibility == 'team'`; rejected for any other
+    /// visibility (the DB CHECK constraint also enforces the
+    /// coupling). The team must belong to the org tenant the request
+    /// targets.
+    #[serde(default)]
+    team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -121,43 +137,65 @@ async fn list_docs(
         visibility: String,
         title: String,
         updated: Option<NaiveDate>,
+        team_id: Option<Uuid>,
     }
 
     // Two queries (docs, tags-for-those-docs) joined in Rust. Ungrouped
     // array_agg would work too but keeps the binding simpler this way.
+    //
+    // Visibility filter has two clauses:
+    //   * private: only the author (or NULL legacy rows) may see it.
+    //   * team: only org admins/owners or the team's members may see
+    //     it. `$N::bool` short-circuits on admins so the membership
+    //     subquery doesn't fire for them.
+    let is_org_admin = tc.is_admin();
     let rows: Vec<Row> = if let Some(ref t) = q.type_ {
         sqlx::query_as(
             r#"
             SELECT doc_id, type_, visibility, title,
-                   (frontmatter->>'updated')::date AS updated
+                   (frontmatter->>'updated')::date AS updated,
+                   team_id
             FROM documents
             WHERE tenant_id = $1 AND type_ = $2
               AND (visibility != 'private'
                    OR author_account_id = $3
                    OR author_account_id IS NULL)
+              AND (visibility != 'team'
+                   OR $4::bool
+                   OR team_id IN (
+                       SELECT team_id FROM team_memberships WHERE account_id = $3
+                   ))
             ORDER BY updated_at DESC, doc_id ASC
             "#,
         )
         .bind(tc.tenant_id)
         .bind(t)
         .bind(tc.account_id)
+        .bind(is_org_admin)
         .fetch_all(&state.db)
         .await?
     } else {
         sqlx::query_as(
             r#"
             SELECT doc_id, type_, visibility, title,
-                   (frontmatter->>'updated')::date AS updated
+                   (frontmatter->>'updated')::date AS updated,
+                   team_id
             FROM documents
             WHERE tenant_id = $1
               AND (visibility != 'private'
                    OR author_account_id = $2
                    OR author_account_id IS NULL)
+              AND (visibility != 'team'
+                   OR $3::bool
+                   OR team_id IN (
+                       SELECT team_id FROM team_memberships WHERE account_id = $2
+                   ))
             ORDER BY updated_at DESC, doc_id ASC
             "#,
         )
         .bind(tc.tenant_id)
         .bind(tc.account_id)
+        .bind(is_org_admin)
         .fetch_all(&state.db)
         .await?
     };
@@ -176,6 +214,7 @@ async fn list_docs(
                 title: r.title,
                 updated: r.updated,
                 tags,
+                team_id: r.team_id,
             }
         })
         .collect();
@@ -189,20 +228,27 @@ async fn read_doc(
     Path((_tid, doc_id)): Path<(Uuid, String)>,
 ) -> Result<Json<DocResponse>, ApiError> {
     validate_doc_id(&doc_id)?;
+    let is_org_admin = tc.is_admin();
     let row: Option<DocRow> = sqlx::query_as(
         r#"
         SELECT type_, visibility, frontmatter, body, body_ciphertext,
-               version, updated_at
+               version, updated_at, team_id
         FROM documents
         WHERE tenant_id = $1 AND doc_id = $2
           AND (visibility != 'private'
                OR author_account_id = $3
                OR author_account_id IS NULL)
+          AND (visibility != 'team'
+               OR $4::bool
+               OR team_id IN (
+                   SELECT team_id FROM team_memberships WHERE account_id = $3
+               ))
         "#,
     )
     .bind(tc.tenant_id)
     .bind(&doc_id)
     .bind(tc.account_id)
+    .bind(is_org_admin)
     .fetch_optional(&state.db)
     .await?;
 
@@ -239,6 +285,7 @@ async fn read_doc(
         version: row.version,
         updated_at: row.updated_at,
         source,
+        team_id: row.team_id,
     }))
 }
 
@@ -267,6 +314,56 @@ async fn write_doc(
     if doc.frontmatter.type_ == "org" && !tc.can_write_org() {
         return Err(ApiError::Forbidden);
     }
+    // Team binding gate. Strict coupling: visibility=team ⇔ team_id
+    // is supplied. The DB CHECK constraint enforces the same
+    // invariant; we validate here too so the error message is useful
+    // (and so the membership/team-existence checks below have a
+    // canonical team_id to work with).
+    let new_visibility = doc.frontmatter.visibility.as_label().to_string();
+    let team_id = req.team_id;
+    if new_visibility == "team" && team_id.is_none() {
+        return Err(ApiError::InvalidArgument(
+            "team_id is required when visibility = 'team'".into(),
+        ));
+    }
+    if new_visibility != "team" && team_id.is_some() {
+        return Err(ApiError::InvalidArgument(
+            "team_id is only allowed when visibility = 'team'".into(),
+        ));
+    }
+    if let Some(tid) = team_id {
+        // Team must belong to the org tenant the request targets, and
+        // the caller must be either an org admin/owner or a manager
+        // of this team. Plain team membership is enough to read team
+        // docs but not to write them.
+        let row: Option<(Uuid, Option<String>)> = sqlx::query_as(
+            r#"
+            SELECT t.id,
+                   (SELECT tm.role FROM team_memberships tm
+                    WHERE tm.team_id = t.id AND tm.account_id = $3) AS viewer_role
+            FROM teams t
+            JOIN organizations o ON o.id = t.org_id
+            WHERE t.id = $1 AND o.tenant_id = $2
+            "#,
+        )
+        .bind(tid)
+        .bind(tc.tenant_id)
+        .bind(tc.account_id)
+        .fetch_optional(&state.db)
+        .await?;
+        let viewer_role = match row {
+            Some((_id, role)) => role,
+            None => {
+                return Err(ApiError::InvalidArgument(
+                    "team does not belong to this org".into(),
+                ));
+            }
+        };
+        let is_team_manager = viewer_role.as_deref() == Some("manager");
+        if !tc.is_admin() && !is_team_manager {
+            return Err(ApiError::Forbidden);
+        }
+    }
     let canonical = doc
         .serialize()
         .map_err(|e| ApiError::Internal(Box::new(e)))?;
@@ -283,25 +380,27 @@ async fn write_doc(
         .map_err(|e| ApiError::Internal(Box::new(e)))?;
     let title = extract_title(&body, &doc_id);
     let type_ = doc.frontmatter.type_.clone();
-    let visibility = doc.frontmatter.visibility.as_label().to_string();
+    let visibility = new_visibility.clone();
 
     // One transaction spans: version check, upsert, tag/link replace,
     // audit append.
     let mut tx = state.db.begin().await?;
 
-    let existing: Option<(String, String, String, Option<Uuid>)> = sqlx::query_as(
-        "SELECT version, type_, visibility, author_account_id FROM documents \
-         WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
-    )
-    .bind(tc.tenant_id)
-    .bind(&doc_id)
-    .fetch_optional(&mut *tx)
-    .await?;
+    let existing: Option<(String, String, String, Option<Uuid>, Option<Uuid>)> =
+        sqlx::query_as(
+            "SELECT version, type_, visibility, author_account_id, team_id \
+             FROM documents \
+             WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
+        )
+        .bind(tc.tenant_id)
+        .bind(&doc_id)
+        .fetch_optional(&mut *tx)
+        .await?;
 
     // Catch the downgrade case: existing doc at this id is type=org,
     // and the writer doesn't have can_write_org. Even if the new doc
     // is type=task, this is overwriting an org doc.
-    if let Some((_, existing_type, _, _)) = existing.as_ref() {
+    if let Some((_, existing_type, _, _, _)) = existing.as_ref() {
         if existing_type == "org" && !tc.can_write_org() {
             return Err(ApiError::Forbidden);
         }
@@ -311,7 +410,7 @@ async fn write_doc(
     // This keeps the write surface aligned with the read surface
     // (both 404 the same way) so a non-author can't probe for the
     // existence of a private doc.
-    if let Some((_, _, existing_visibility, existing_author)) = existing.as_ref() {
+    if let Some((_, _, existing_visibility, existing_author, _)) = existing.as_ref() {
         if existing_visibility == "private"
             && existing_author.is_some()
             && existing_author != &Some(tc.account_id)
@@ -319,10 +418,37 @@ async fn write_doc(
             return Err(ApiError::NotFound);
         }
     }
+    // Team-doc downgrade gate: if an existing row at this id is
+    // already team-bound, the writer must be either an org admin/owner
+    // or a manager of the *existing* team. This blocks a stranger
+    // from overwriting a team doc by reposting it with a non-team
+    // visibility. The membership check above already covered the new
+    // team_id; this check covers the old one.
+    if let Some((_, _, existing_visibility, _, existing_team_id)) = existing.as_ref() {
+        if existing_visibility == "team" {
+            if let Some(prev_team_id) = existing_team_id {
+                let prev_role: Option<(String,)> = sqlx::query_as(
+                    "SELECT role FROM team_memberships \
+                     WHERE team_id = $1 AND account_id = $2",
+                )
+                .bind(prev_team_id)
+                .bind(tc.account_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+                let is_prev_manager = matches!(
+                    prev_role.as_ref().map(|(r,)| r.as_str()),
+                    Some("manager")
+                );
+                if !tc.is_admin() && !is_prev_manager {
+                    return Err(ApiError::Forbidden);
+                }
+            }
+        }
+    }
 
     if let Some(expected) = req.base_version.as_ref() {
         match &existing {
-            Some((stored, _, _, _)) if stored != expected => {
+            Some((stored, _, _, _, _)) if stored != expected => {
                 return Err(ApiError::Conflict("version_conflict"));
             }
             None => {
@@ -373,8 +499,8 @@ async fn write_doc(
         INSERT INTO documents
             (tenant_id, doc_id, type_, visibility, title,
              frontmatter, body, body_ciphertext, key_version,
-             version, author_account_id, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+             version, author_account_id, team_id, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
         ON CONFLICT (tenant_id, doc_id) DO UPDATE SET
             type_           = EXCLUDED.type_,
             visibility      = EXCLUDED.visibility,
@@ -384,6 +510,7 @@ async fn write_doc(
             body_ciphertext = EXCLUDED.body_ciphertext,
             key_version     = EXCLUDED.key_version,
             version         = EXCLUDED.version,
+            team_id         = EXCLUDED.team_id,
             updated_at      = EXCLUDED.updated_at
         "#,
     )
@@ -398,6 +525,7 @@ async fn write_doc(
     .bind(stored_key_version)
     .bind(&new_version)
     .bind(tc.account_id)
+    .bind(team_id)
     .bind(now)
     .execute(&mut *tx)
     .await?;
@@ -426,6 +554,7 @@ async fn write_doc(
         visibility,
         version: new_version,
         updated_at: now,
+        team_id,
     }))
 }
 
@@ -439,16 +568,20 @@ async fn delete_doc(
 
     let mut tx = state.db.begin().await?;
 
-    let existing: Option<(String, String, String, Option<Uuid>)> = sqlx::query_as(
-        "SELECT version, type_, visibility, author_account_id FROM documents \
-         WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
-    )
-    .bind(tc.tenant_id)
-    .bind(&doc_id)
-    .fetch_optional(&mut *tx)
-    .await?;
+    let existing: Option<(String, String, String, Option<Uuid>, Option<Uuid>)> =
+        sqlx::query_as(
+            "SELECT version, type_, visibility, author_account_id, team_id \
+             FROM documents \
+             WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
+        )
+        .bind(tc.tenant_id)
+        .bind(&doc_id)
+        .fetch_optional(&mut *tx)
+        .await?;
 
-    let Some((version, existing_type, existing_visibility, existing_author)) = existing else {
+    let Some((version, existing_type, existing_visibility, existing_author, existing_team_id)) =
+        existing
+    else {
         return Err(ApiError::NotFound);
     };
     // Visibility-private privacy: a non-author can't even know the
@@ -462,6 +595,28 @@ async fn delete_doc(
     // Org-context delete gate (D17g). Members can't delete an org doc.
     if existing_type == "org" && !tc.can_write_org() {
         return Err(ApiError::Forbidden);
+    }
+    // Team-context delete gate. Mirrors the write gate above:
+    // org admin/owner OR a manager of the existing doc's team. Plain
+    // team membership is enough to read but not delete.
+    if existing_visibility == "team" {
+        if let Some(prev_team_id) = existing_team_id {
+            let prev_role: Option<(String,)> = sqlx::query_as(
+                "SELECT role FROM team_memberships \
+                 WHERE team_id = $1 AND account_id = $2",
+            )
+            .bind(prev_team_id)
+            .bind(tc.account_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            let is_prev_manager = matches!(
+                prev_role.as_ref().map(|(r,)| r.as_str()),
+                Some("manager")
+            );
+            if !tc.is_admin() && !is_prev_manager {
+                return Err(ApiError::Forbidden);
+            }
+        }
     }
     if let Some(expected) = q.base_version.as_ref() {
         if *expected != version {
@@ -496,15 +651,22 @@ async fn doc_count(
     State(state): State<AppState>,
     Extension(tc): Extension<TenantContext>,
 ) -> Result<Json<DocCountResponse>, ApiError> {
+    let is_org_admin = tc.is_admin();
     let (count,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM documents \
          WHERE tenant_id = $1 \
            AND (visibility != 'private' \
                 OR author_account_id = $2 \
-                OR author_account_id IS NULL)",
+                OR author_account_id IS NULL) \
+           AND (visibility != 'team' \
+                OR $3::bool \
+                OR team_id IN ( \
+                    SELECT team_id FROM team_memberships WHERE account_id = $2 \
+                ))",
     )
     .bind(tc.tenant_id)
     .bind(tc.account_id)
+    .bind(is_org_admin)
     .fetch_one(&state.db)
     .await?;
     Ok(Json(DocCountResponse { count }))
@@ -524,6 +686,7 @@ struct DocRow {
     body_ciphertext: Option<String>,
     version: String,
     updated_at: DateTime<Utc>,
+    team_id: Option<Uuid>,
 }
 
 /// Pick the plaintext body for a read: either the stored `body` (for
