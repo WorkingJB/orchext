@@ -22,11 +22,16 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
   const [members, setMembers] = useState<MemberDetail[] | null>(null);
   const [pending, setPending] = useState<PendingDetail[] | null>(null);
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
+  const [myAccountId, setMyAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("member");
+
+  useEffect(() => {
+    api.me().then((r) => setMyAccountId(r.account.id)).catch(() => {});
+  }, []);
 
   async function reload() {
     setError(null);
@@ -287,16 +292,29 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
             <p className="text-sm text-neutral-500">Loading…</p>
           ) : (
             <ul className="bg-white border border-neutral-200 rounded-md divide-y divide-neutral-100">
-              {members.map((m) => (
-                <MemberRow
-                  key={m.account_id}
-                  row={m}
-                  busy={busy === m.account_id}
-                  callerIsOwner={callerIsOwner}
-                  onChangeRole={(role) => changeRole(m.account_id, role)}
-                  onRemove={() => remove(m.account_id)}
-                />
-              ))}
+              {members.map((m) => {
+                // Last-owner self-remove guard (UI-side; the server
+                // also returns 409 here). If you're the only owner of
+                // the org and you're looking at yourself, there's no
+                // valid role-change or remove action — hide the
+                // controls so the user doesn't get a confusing error.
+                const isSelf = myAccountId !== null && m.account_id === myAccountId;
+                const ownerCount =
+                  members?.filter((x) => x.role === "owner").length ?? 0;
+                const lockSelf =
+                  isSelf && m.role === "owner" && ownerCount <= 1;
+                return (
+                  <MemberRow
+                    key={m.account_id}
+                    row={m}
+                    busy={busy === m.account_id}
+                    callerIsOwner={callerIsOwner}
+                    locked={lockSelf}
+                    onChangeRole={(role) => changeRole(m.account_id, role)}
+                    onRemove={() => remove(m.account_id)}
+                  />
+                );
+              })}
             </ul>
           )}
         </section>
@@ -356,12 +374,18 @@ function MemberRow({
   row,
   busy,
   callerIsOwner,
+  locked,
   onChangeRole,
   onRemove,
 }: {
   row: MemberDetail;
   busy: boolean;
   callerIsOwner: boolean;
+  /// True when this row is the caller AND the caller is the only
+  /// owner — server-side rejects any change here (last-owner guard),
+  /// so we hide the controls rather than show buttons that always
+  /// 409.
+  locked: boolean;
   onChangeRole: (role: Role) => void;
   onRemove: () => void;
 }) {
@@ -371,19 +395,30 @@ function MemberRow({
         <div className="text-sm font-medium truncate">{row.display_name}</div>
         <div className="text-xs text-neutral-500 truncate">{row.email}</div>
       </div>
-      <RoleSelect
-        value={row.role}
-        onChange={onChangeRole}
-        callerIsOwner={callerIsOwner}
-        disabled={busy}
-      />
-      <button
-        onClick={onRemove}
-        disabled={busy}
-        className="text-xs px-2 py-1 rounded border border-neutral-300 text-neutral-700 hover:bg-red-50 hover:text-red-700 hover:border-red-300 disabled:opacity-50"
-      >
-        Remove
-      </button>
+      {locked ? (
+        <span
+          className="text-xs text-neutral-500 italic"
+          title="The org must retain at least one owner. Promote another member to owner before changing your role."
+        >
+          {row.role} (only owner)
+        </span>
+      ) : (
+        <>
+          <RoleSelect
+            value={row.role}
+            onChange={onChangeRole}
+            callerIsOwner={callerIsOwner}
+            disabled={busy}
+          />
+          <button
+            onClick={onRemove}
+            disabled={busy}
+            className="text-xs px-2 py-1 rounded border border-neutral-300 text-neutral-700 hover:bg-red-50 hover:text-red-700 hover:border-red-300 disabled:opacity-50"
+          >
+            Remove
+          </button>
+        </>
+      )}
     </li>
   );
 }
