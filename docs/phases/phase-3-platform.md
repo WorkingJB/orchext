@@ -139,8 +139,23 @@ appears, revisit and consider a permissions-flag matrix.
 
 ## Deliverables
 
-### Slice 1 — Org foundation
-*(Notion: [Org foundation](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) · [Seed `org/` type + visibility](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07))*
+### Slice 1 — Org foundation — **shipped 2026-04-27**
+*(Notion: [Org foundation — Done](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) · [Seed `org/` type + visibility — Done](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07))*
+
+**Status:** Server, web, and desktop all closed 2026-04-27. The
+desktop port followed the web by ~2 days (one slice's worth of
+commits to bring it to parity); see commit range `d9031ad..21d30e0`.
+A separate context-aware token-issuing fix landed alongside on both
+clients — was broken in org workspaces because the form offered no
+`org` scope checkbox.
+
+**Cuts realized:** invite-code paste modal on desktop deferred to
+Phase 4 installer slice (per-OS deep-link work). Domain auto-join +
+email verification deferred to a later "email infra" slice (D17e).
+Awaiting-approval state on desktop is intentionally transient (no
+synthetic pending workspace registry entry); closing the app while
+pending requires re-entering the password to check status. OS
+keychain stays on Slice 4.
 
 - **Server**
   - New `organizations` table: id, name, logo_url,

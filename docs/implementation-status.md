@@ -68,13 +68,13 @@ task aggregation + agent orchestration. Plan detail in
 | `orchext-auth`   | ✅ shipped     | 11   | 9           | Opaque tokens + Argon2id + scopes      |
 | `orchext-index`  | ✅ shipped     | 4    | 6           | SQLite + FTS5; search / graph / filter |
 | `orchext-mcp`    | ✅ shipped     | 11   | 26          | JSON-RPC + stdio; rate limit + fs watcher; `context_propose` spool |
-| `orchext-desktop`| ✅ 2a + 2b.2 + 2b.3 | 7 | —           | Multi-vault + remote connect + unlock/lock |
-| `orchext-server` | ✅ 2b.3 + 2b.5 | 45 | 50          | Auth + vault + index + tokens + audit + crypto + OAuth + MCP HTTP + proposals + readiness + CORS |
-| `orchext-sync`   | ✅ 2b.2 + 2b.3 | 0   | —           | `RemoteVaultDriver` + crypto control calls |
+| `orchext-desktop`| ✅ 2a + 2b.2 + 2b.3 + 2b.5 + 3-slice1 | 7 | —           | Multi-vault + remote connect + unlock/lock + proposals + org rail + admin views |
+| `orchext-server` | ✅ 2b.3 + 2b.5 + 3-slice1 | 45 | 50          | Auth + vault + index + tokens + audit + crypto + OAuth + MCP HTTP + proposals + orgs/members/pending/invitations + readiness + CORS |
+| `orchext-sync`   | ✅ 2b.2 + 2b.3 + 3-slice1 | 0   | —           | `RemoteVaultDriver` + crypto control calls + server-level orgs/auth helpers |
 | `orchext-oauth-client` | ✅ 2b.5 | 9 | —           | PKCE agent helper + `orchext-oauth` CLI    |
 | `orchext-crypto` | ✅ 2b.3 + wasm32 | 13 | —           | Argon2id KDF + XChaCha20-Poly1305 AEAD; browser build clean |
 | `orchext-crypto-wasm` | ✅ 2b.4 | —  | —               | wasm-bindgen surface; 4 ops: generateSalt/ContentKey, wrap/unwrap |
-| `orchext-web`    | ✅ 2b.4 + 2b.5 | — | —            | Login + tenant picker + unlock + doc CRUD + tokens + audit + OAuth consent |
+| `orchext-web`    | ✅ 2b.4 + 2b.5 + 3-slice1 | — | —            | Login + tenant picker + unlock + doc CRUD + tokens + audit + OAuth consent + org rail + admin views |
 
 **Production hardening 2026-04-26 (post first deploy to
 `app.orchext.ai` + `test-app.orchext.ai`):** three fixes landed after
@@ -173,6 +173,46 @@ base-version optimistic concurrency, tokens admin, and audit list.
 Graph view dropped from both clients; onboarding chat moved to
 Phase 3 platform.
 
+**Phase 3 platform Slice 1 — Org foundation — shipped 2026-04-27**
+*([Notion](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8))*.
+End-to-end org-and-membership platform. (1) **Server** — `organizations`
++ `pending_signups` + `org_invitations` tables; first-signup bootstrap
+(self-hosted singleton; SaaS domain-match → pending else new-org);
+`/v1/orgs` CRUD + members + pending queue + invitations; role middleware
+(`owner` / `admin` / `org_editor` / `member`); last-owner guards;
+`org/` seed type + `org:` visibility (FORMAT v0.2);
+`documents.author_account_id` + private-doc read filter.
+(2) **Web** — Slack-style left rail (`OrgRail`), awaiting-approval gate
+(D17d), members admin (approve / reject / role-change / invite by
+email / last-owner self-remove guard), org settings (name + logo),
+right-nav collapsed to Documents + Settings, 4-layer visibility UI
+(`private` / `personal` / `work` / `org` / `public` filtered per
+context), inline proposal banner + Tiptap markdown editor on doc
+detail, doc-form cleanup (auto-id from title, type as proper select,
+title field + plain-text body, default visibility per section, type
+auto-set from active filter on create). (3) **Desktop** — full
+parity port of the rail + admin views + RichTextEditor + restructured
+shell (header + left rail + Docs/Settings nav, dropping the top-bar
+WorkspaceSwitcher). `workspace_connect_remote` now returns a tagged
+`Connected | PendingApproval` outcome so the awaiting-approval gate
+renders even on a fresh login with no memberships. New
+`crates/orchext-sync::orgs` standalone bearer-auth wrappers for the
+server-level `/v1/orgs/*` and `/v1/auth/{me,logout}` endpoints; new
+`apps/desktop/src-tauri/src/orgs.rs` Tauri commands keyed by
+workspace id. (4) **Token issuing UX fix** — IssueForm scope
+checkboxes were a hardcoded 4-value `[public, work, personal,
+private]` on both clients; broken in org workspaces because docs
+there are tagged `private` or `org` and the form offered no `org`
+checkbox. Now context-aware: org → `[public, private, org]`
+default `[org, public]`, otherwise → `[public, work, personal,
+private]` default `[work, public]`. Server-side scope match was
+already literal-against-visibility-label (`Scope::new` accepts
+`org`); only the form changed. **Cuts:** invite-code paste modal on
+desktop deferred to Phase 4 installer slice (per-OS deep-link work);
+domain auto-join + email verification deferred to a later "email
+infra" slice (D17e); OS keychain stays on Slice 4. Forward plan in
+[`phases/phase-3-platform.md`](phases/phase-3-platform.md).
+
 ---
 
 ## Phase docs
@@ -220,23 +260,21 @@ phase docs themselves.
 
 ### In flight
 
-_(none — Phase 2b.5 closed 2026-04-27 with `context.propose`.)_
+- [`phases/phase-3-platform.md`](phases/phase-3-platform.md) —
+  Orgs + teams + web onboarding chat + OS keychain. **Slice 1
+  (Org foundation) shipped 2026-04-27** on web + desktop (see
+  narrative above). **Slices 2-4 remain.**
+  *(Notion: [Slice 1 Org foundation — Done](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) ·
+  [`org/` seed type — Done](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07) ·
+  [Slice 2 Teams](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33) ·
+  [Slice 3 onboarding chat](https://www.notion.so/34d47fdae49a81d6a012e90cbbcb0d0b) ·
+  [Slice 4 OS keychain](https://www.notion.so/34d47fdae49a819c8ce9dd6511989596))*
 
 ### Planned
 
 - [`phases/phase-2-plan.md`](phases/phase-2-plan.md) — Phase 2 goals,
   decisions D7–D17, remaining 2b.5 slices, scope cuts, open
   questions.
-- [`phases/phase-3-platform.md`](phases/phase-3-platform.md) —
-  Orgs + teams (recast from "team workspaces" on 2026-04-27 — see
-  revised D10 / D11 + new D17c–D17g), web onboarding chat, OS
-  keychain. Sliced into Slice 1 (Org foundation) → Slice 2 (Teams)
-  → Slice 3 (Web onboarding chat) → Slice 4 (OS keychain).
-  *(Notion: [Slice 1 Org foundation](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) ·
-  [`org/` seed type sub-item](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07) ·
-  [Slice 2 Teams](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33) ·
-  [Slice 3 onboarding chat](https://www.notion.so/34d47fdae49a81d6a012e90cbbcb0d0b) ·
-  [Slice 4 OS keychain](https://www.notion.so/34d47fdae49a819c8ce9dd6511989596))*
 - [`phases/phase-3a-rebrand-tasks.md`](phases/phase-3a-rebrand-tasks.md) —
   Rebrand `orchext` → `orchext` + vault-native `type: task` and
   `type: skill` seed types (FORMAT v0.2). Kicks off after Phase 3
