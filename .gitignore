@@ -16,3 +16,10 @@ Cargo.lock.bak
 node_modules/
 dist/
 *.tsbuildinfo
+
+# Root-only npm files: tooling installs (e.g. `vercel` CLI) drop these
+# at the repo root. Workspace-level apps/*/package.json are tracked;
+# these root patterns are anchored with a leading slash so they don't
+# match nested package.json files.
+/package.json
+/package-lock.json
