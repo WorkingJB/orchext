@@ -125,6 +125,9 @@ async fn search(
                  WHERE t.tenant_id = d.tenant_id
                    AND t.doc_id = d.doc_id
                    AND t.tag = ANY($5)))
+          AND (d.visibility != 'private'
+               OR d.author_account_id = $8
+               OR d.author_account_id IS NULL)
         ORDER BY score DESC
         LIMIT $7
         "#,
@@ -136,6 +139,7 @@ async fn search(
     .bind(nullable_array(&tags))
     .bind(p.updated_since)
     .bind(limit)
+    .bind(tc.account_id)
     .fetch_all(&state.db)
     .await?;
 
@@ -227,6 +231,9 @@ async fn list(
                  WHERE t.tenant_id = d.tenant_id
                    AND t.doc_id = d.doc_id
                    AND t.tag = ANY($4)))
+          AND (d.visibility != 'private'
+               OR d.author_account_id = $7
+               OR d.author_account_id IS NULL)
         ORDER BY COALESCE((d.frontmatter->>'updated')::date, '0001-01-01'::date) DESC,
                  d.doc_id ASC
         LIMIT $6
@@ -238,6 +245,7 @@ async fn list(
     .bind(nullable_array(&tags))
     .bind(p.updated_since)
     .bind(limit)
+    .bind(tc.account_id)
     .fetch_all(&state.db)
     .await?;
 

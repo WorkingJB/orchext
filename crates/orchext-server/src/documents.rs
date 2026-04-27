@@ -132,11 +132,15 @@ async fn list_docs(
                    (frontmatter->>'updated')::date AS updated
             FROM documents
             WHERE tenant_id = $1 AND type_ = $2
+              AND (visibility != 'private'
+                   OR author_account_id = $3
+                   OR author_account_id IS NULL)
             ORDER BY updated_at DESC, doc_id ASC
             "#,
         )
         .bind(tc.tenant_id)
         .bind(t)
+        .bind(tc.account_id)
         .fetch_all(&state.db)
         .await?
     } else {
@@ -146,10 +150,14 @@ async fn list_docs(
                    (frontmatter->>'updated')::date AS updated
             FROM documents
             WHERE tenant_id = $1
+              AND (visibility != 'private'
+                   OR author_account_id = $2
+                   OR author_account_id IS NULL)
             ORDER BY updated_at DESC, doc_id ASC
             "#,
         )
         .bind(tc.tenant_id)
+        .bind(tc.account_id)
         .fetch_all(&state.db)
         .await?
     };
@@ -187,10 +195,14 @@ async fn read_doc(
                version, updated_at
         FROM documents
         WHERE tenant_id = $1 AND doc_id = $2
+          AND (visibility != 'private'
+               OR author_account_id = $3
+               OR author_account_id IS NULL)
         "#,
     )
     .bind(tc.tenant_id)
     .bind(&doc_id)
+    .bind(tc.account_id)
     .fetch_optional(&state.db)
     .await?;
 
@@ -277,8 +289,9 @@ async fn write_doc(
     // audit append.
     let mut tx = state.db.begin().await?;
 
-    let existing: Option<(String, String)> = sqlx::query_as(
-        "SELECT version, type_ FROM documents WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
+    let existing: Option<(String, String, String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT version, type_, visibility, author_account_id FROM documents \
+         WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
     )
     .bind(tc.tenant_id)
     .bind(&doc_id)
@@ -288,15 +301,28 @@ async fn write_doc(
     // Catch the downgrade case: existing doc at this id is type=org,
     // and the writer doesn't have can_write_org. Even if the new doc
     // is type=task, this is overwriting an org doc.
-    if let Some((_, existing_type)) = existing.as_ref() {
+    if let Some((_, existing_type, _, _)) = existing.as_ref() {
         if existing_type == "org" && !tc.can_write_org() {
             return Err(ApiError::Forbidden);
+        }
+    }
+    // Visibility-private privacy: the existing doc belongs to a
+    // different author and is private — pretend it doesn't exist.
+    // This keeps the write surface aligned with the read surface
+    // (both 404 the same way) so a non-author can't probe for the
+    // existence of a private doc.
+    if let Some((_, _, existing_visibility, existing_author)) = existing.as_ref() {
+        if existing_visibility == "private"
+            && existing_author.is_some()
+            && existing_author != &Some(tc.account_id)
+        {
+            return Err(ApiError::NotFound);
         }
     }
 
     if let Some(expected) = req.base_version.as_ref() {
         match &existing {
-            Some((stored, _)) if stored != expected => {
+            Some((stored, _, _, _)) if stored != expected => {
                 return Err(ApiError::Conflict("version_conflict"));
             }
             None => {
@@ -335,13 +361,20 @@ async fn write_doc(
         };
 
     let now = Utc::now();
+    // author_account_id is set on first INSERT and **preserved** on
+    // UPDATE — the original author keeps ownership for the purposes
+    // of visibility=private filtering, even if a co-owner with
+    // can_write_org edits later. (The downgrade path above already
+    // refuses non-author writes to private docs, so this UPDATE
+    // branch only fires when the writer either is the author or the
+    // doc isn't private.)
     sqlx::query(
         r#"
         INSERT INTO documents
             (tenant_id, doc_id, type_, visibility, title,
              frontmatter, body, body_ciphertext, key_version,
-             version, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+             version, author_account_id, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
         ON CONFLICT (tenant_id, doc_id) DO UPDATE SET
             type_           = EXCLUDED.type_,
             visibility      = EXCLUDED.visibility,
@@ -364,6 +397,7 @@ async fn write_doc(
     .bind(&stored_ciphertext)
     .bind(stored_key_version)
     .bind(&new_version)
+    .bind(tc.account_id)
     .bind(now)
     .execute(&mut *tx)
     .await?;
@@ -405,17 +439,26 @@ async fn delete_doc(
 
     let mut tx = state.db.begin().await?;
 
-    let existing: Option<(String, String)> = sqlx::query_as(
-        "SELECT version, type_ FROM documents WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
+    let existing: Option<(String, String, String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT version, type_, visibility, author_account_id FROM documents \
+         WHERE tenant_id = $1 AND doc_id = $2 FOR UPDATE",
     )
     .bind(tc.tenant_id)
     .bind(&doc_id)
     .fetch_optional(&mut *tx)
     .await?;
 
-    let Some((version, existing_type)) = existing else {
+    let Some((version, existing_type, existing_visibility, existing_author)) = existing else {
         return Err(ApiError::NotFound);
     };
+    // Visibility-private privacy: a non-author can't even know the
+    // doc exists. Same 404 the read path returns.
+    if existing_visibility == "private"
+        && existing_author.is_some()
+        && existing_author != Some(tc.account_id)
+    {
+        return Err(ApiError::NotFound);
+    }
     // Org-context delete gate (D17g). Members can't delete an org doc.
     if existing_type == "org" && !tc.can_write_org() {
         return Err(ApiError::Forbidden);
@@ -453,11 +496,17 @@ async fn doc_count(
     State(state): State<AppState>,
     Extension(tc): Extension<TenantContext>,
 ) -> Result<Json<DocCountResponse>, ApiError> {
-    let (count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM documents WHERE tenant_id = $1")
-            .bind(tc.tenant_id)
-            .fetch_one(&state.db)
-            .await?;
+    let (count,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM documents \
+         WHERE tenant_id = $1 \
+           AND (visibility != 'private' \
+                OR author_account_id = $2 \
+                OR author_account_id IS NULL)",
+    )
+    .bind(tc.tenant_id)
+    .bind(tc.account_id)
+    .fetch_one(&state.db)
+    .await?;
     Ok(Json(DocCountResponse { count }))
 }
 
