@@ -1,11 +1,39 @@
 use orchext_server::{config::Config, router, AppState};
 use sqlx::postgres::PgPoolOptions;
+use std::io::{self, BufRead, Write};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    match args.get(1).map(String::as_str) {
+        Some("wipe") => {
+            let skip_confirm = args.iter().any(|a| a == "--yes" || a == "-y");
+            return run_wipe(skip_confirm).await;
+        }
+        Some(other) if other.starts_with('-') => {
+            // Fall through to server startup; flags belong to that
+            // path historically (none today, but reserved).
+        }
+        Some(other) => {
+            eprintln!(
+                "unknown subcommand: {other}\n\
+                 \n\
+                 usage:\n\
+                 \torchext-server          run the HTTP server\n\
+                 \torchext-server wipe     TRUNCATE all user-facing tables (destructive)\n\
+                 \torchext-server wipe --yes  same, skip the typed confirmation"
+            );
+            std::process::exit(2);
+        }
+        None => {}
+    }
+    run_server().await
+}
+
+async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -66,6 +94,181 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
+}
+
+/// `orchext-server wipe` — TRUNCATE all user-facing tables. Used between
+/// testing rounds to clear stale state (accounts that pre-date a schema
+/// change, half-broken signups, etc.). Cascades through every dependent
+/// table thanks to ON DELETE CASCADE on the FKs:
+///
+///   accounts → sessions, memberships, mcp_tokens, pending_signups,
+///              oauth_authorization_codes
+///   tenants  → organizations, documents (→ doc_links, doc_tags),
+///              audit_entries, proposals, mcp_tokens,
+///              oauth_authorization_codes
+///
+/// Reads `DATABASE_URL` from the environment (same as the server). By
+/// default, prompts the operator to retype the database name to confirm —
+/// fat-fingering test instead of prod, etc. `--yes` skips the prompt for
+/// scripted use.
+async fn run_wipe(skip_confirm: bool) -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "warn".into()),
+        )
+        .compact()
+        .init();
+
+    let config = Config::from_env()?;
+    let target = redact_password(&config.database_url);
+    let db_name = db_name_from_url(&config.database_url);
+
+    eprintln!("Wipe target: {target}");
+    if let Some(name) = db_name.as_deref() {
+        eprintln!("Database name: {name}");
+    }
+
+    let db = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&config.database_url)
+        .await?;
+
+    // Pre-flight row counts so the operator sees the blast radius.
+    // `accounts` and `tenants` are the cascade roots — every other row
+    // is reachable from one of them.
+    let counts: Result<(i64, i64, i64), sqlx::Error> = sqlx::query_as(
+        "SELECT \
+            (SELECT COUNT(*) FROM accounts), \
+            (SELECT COUNT(*) FROM tenants), \
+            (SELECT COUNT(*) FROM organizations)",
+    )
+    .fetch_one(&db)
+    .await;
+
+    match counts {
+        Ok((accts, tens, orgs)) => {
+            eprintln!(
+                "Will TRUNCATE: {accts} account(s), {tens} tenant(s), {orgs} org(s) \
+                 (cascading to all dependents)."
+            );
+        }
+        Err(e) => {
+            eprintln!(
+                "Could not read row counts ({e}). The DB might be uninitialized — \
+                 run the server once first to apply migrations, then retry the wipe."
+            );
+            return Err(Box::new(e));
+        }
+    }
+
+    if !skip_confirm {
+        match db_name {
+            Some(expected) => {
+                eprint!("\nType the database name ({expected}) to confirm: ");
+                io::stderr().flush().ok();
+                let mut line = String::new();
+                io::stdin().lock().read_line(&mut line)?;
+                if line.trim() != expected {
+                    eprintln!("Confirmation didn't match. Aborting.");
+                    return Ok(());
+                }
+            }
+            None => {
+                // Couldn't parse a db name — fall back to typing WIPE.
+                eprint!("\nType WIPE to confirm: ");
+                io::stderr().flush().ok();
+                let mut line = String::new();
+                io::stdin().lock().read_line(&mut line)?;
+                if line.trim() != "WIPE" {
+                    eprintln!("Confirmation didn't match. Aborting.");
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    sqlx::query("TRUNCATE TABLE accounts, tenants RESTART IDENTITY CASCADE")
+        .execute(&db)
+        .await?;
+
+    eprintln!("Done. All user-facing tables truncated.");
+    Ok(())
+}
+
+/// Replace `:password@` with `:***@` so the printed target doesn't
+/// leak credentials in logs or scrollback.
+fn redact_password(url: &str) -> String {
+    // Find `://`, then the next `@` between scheme end and the next
+    // `/`. Replace anything between `:` and `@` in that span with `***`.
+    let Some(scheme_end) = url.find("://") else {
+        return url.to_string();
+    };
+    let after_scheme = scheme_end + 3;
+    let rest = &url[after_scheme..];
+    let Some(at) = rest.find('@') else {
+        return url.to_string();
+    };
+    let userinfo = &rest[..at];
+    let Some(colon) = userinfo.find(':') else {
+        return url.to_string();
+    };
+    let mut out = String::with_capacity(url.len());
+    out.push_str(&url[..after_scheme + colon + 1]);
+    out.push_str("***");
+    out.push_str(&rest[at..]);
+    out
+}
+
+/// Pull the database name out of a `postgres://user:pass@host:port/dbname?params`
+/// string. Best-effort string slicing — returns `None` if the shape doesn't
+/// match.
+fn db_name_from_url(url: &str) -> Option<String> {
+    let after_scheme = url.split_once("://")?.1;
+    let after_authority = after_scheme.split_once('/')?.1;
+    let path = after_authority.split('?').next()?;
+    if path.is_empty() {
+        None
+    } else {
+        Some(path.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redacts_password_from_postgres_url() {
+        assert_eq!(
+            redact_password("postgres://user:secret@host:5432/db"),
+            "postgres://user:***@host:5432/db"
+        );
+    }
+
+    #[test]
+    fn redact_passes_through_when_no_userinfo() {
+        // No password to redact — return unchanged rather than corrupt
+        // the URL.
+        assert_eq!(
+            redact_password("postgres://host:5432/db"),
+            "postgres://host:5432/db"
+        );
+    }
+
+    #[test]
+    fn extracts_db_name_from_postgres_url() {
+        assert_eq!(
+            db_name_from_url("postgres://user:pw@host:5432/orchext_test").as_deref(),
+            Some("orchext_test")
+        );
+        assert_eq!(
+            db_name_from_url("postgres://user:pw@host:5432/db?sslmode=require").as_deref(),
+            Some("db")
+        );
+        assert_eq!(db_name_from_url("postgres://user:pw@host:5432"), None);
+        assert_eq!(db_name_from_url("not a url"), None);
+    }
 }
 
 async fn shutdown_signal() {

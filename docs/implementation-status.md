@@ -408,6 +408,26 @@ DATABASE_URL="postgres://orchext:orchext-dev-password@localhost/orchext" \
   cargo run -p orchext-server
 ```
 
+### Wiping a test/dev database between rounds
+
+`orchext-server wipe` TRUNCATEs all user-facing tables (cascades from
+`accounts` and `tenants`). Useful for clearing stale state between
+testing rounds — e.g. accounts that pre-date a schema change. Reads
+`DATABASE_URL` from the environment, just like the server.
+
+```bash
+# Interactive — prompts for the database name to confirm.
+DATABASE_URL="postgres://orchext:pw@host:5432/orchext_test" \
+  cargo run -p orchext-server -- wipe
+
+# Scripted — skip the typed confirmation. Use carefully.
+DATABASE_URL="..." cargo run -p orchext-server -- wipe --yes
+```
+
+Connection-target preview redacts the password before printing.
+Migrations are not applied by `wipe`; run the server once first if
+the database is uninitialized.
+
 ### Running the desktop app
 
 ```bash
