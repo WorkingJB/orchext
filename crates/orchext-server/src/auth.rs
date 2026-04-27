@@ -182,7 +182,8 @@ async fn signup_browser_handler(
     State(state): State<AppState>,
     Json(input): Json<SignupInput>,
 ) -> Result<Response, ApiError> {
-    let account = accounts::signup(&state.db, input).await?;
+    let result = accounts::signup(&state.db, state.deployment_mode, input).await?;
+    let account = result.account;
     let issued = state.sessions.issue(account.id, None).await?;
     let csrf = generate_csrf_token();
     let max_age = (issued.expires_at - Utc::now()).num_seconds().max(0);
@@ -239,7 +240,8 @@ async fn signup_native_handler(
     State(state): State<AppState>,
     Json(input): Json<SignupInput>,
 ) -> Result<Response, ApiError> {
-    let account = accounts::signup(&state.db, input).await?;
+    let result = accounts::signup(&state.db, state.deployment_mode, input).await?;
+    let account = result.account;
     let issued = state.sessions.issue(account.id, None).await?;
     let body = Json(NativeAuthResponse {
         account: account.into(),

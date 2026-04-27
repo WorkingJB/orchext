@@ -18,6 +18,7 @@ pub mod error;
 pub mod idx;
 pub mod mcp;
 pub mod oauth;
+pub mod orgs;
 pub mod password;
 pub mod proposals;
 pub mod session_keys;
@@ -51,11 +52,15 @@ pub struct AppState {
     /// `tower::ServiceExt::oneshot` doesn't attach a peer `SocketAddr`,
     /// which the IP key extractor needs.
     pub rate_limit_auth: bool,
+    /// `self_hosted` (default) or `saas`. Drives the signup flow's
+    /// org-assignment rule (see `accounts::signup`).
+    pub deployment_mode: config::DeploymentMode,
 }
 
 impl AppState {
     /// Production-style constructor: secure cookies on, rate limiting
-    /// on. Tests use `with_*` builders to opt out where needed.
+    /// on, deployment mode `self_hosted`. Tests use `with_*` builders
+    /// to opt out where needed.
     pub fn new(db: PgPool) -> Self {
         let sessions = Arc::new(sessions::SessionService::new(db.clone()));
         let session_keys = Arc::new(session_keys::SessionKeyStore::new());
@@ -65,6 +70,7 @@ impl AppState {
             session_keys,
             secure_cookies: true,
             rate_limit_auth: true,
+            deployment_mode: config::DeploymentMode::SelfHosted,
         }
     }
 
@@ -75,6 +81,11 @@ impl AppState {
 
     pub fn with_rate_limit_auth(mut self, on: bool) -> Self {
         self.rate_limit_auth = on;
+        self
+    }
+
+    pub fn with_deployment_mode(mut self, mode: config::DeploymentMode) -> Self {
+        self.deployment_mode = mode;
         self
     }
 }
@@ -107,8 +118,9 @@ pub fn router(state: AppState) -> Router {
             auth::session_auth,
         ));
 
-    // Session-authed, non-tenant-scoped (membership listing).
+    // Session-authed, non-tenant-scoped (membership listing + org metadata).
     let tenants_route: Router<AppState> = tenants::router()
+        .merge(orgs::router())
         .route_layer(middleware::from_fn(auth::csrf_guard))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),

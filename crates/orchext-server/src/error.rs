@@ -30,6 +30,13 @@ pub enum ApiError {
     #[error("not found")]
     NotFound,
 
+    /// Caller is authenticated and even allowed to see the resource,
+    /// but the specific operation requires a higher role. Distinct
+    /// from `Unauthorized` (no session at all) and `NotFound`
+    /// (membership-gated visibility).
+    #[error("forbidden")]
+    Forbidden,
+
     #[error("conflict: {0}")]
     Conflict(&'static str),
 
@@ -54,6 +61,7 @@ impl ApiError {
             ApiError::Unauthorized => StatusCode::UNAUTHORIZED,
             ApiError::CsrfFailed => StatusCode::FORBIDDEN,
             ApiError::NotFound => StatusCode::NOT_FOUND,
+            ApiError::Forbidden => StatusCode::FORBIDDEN,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             ApiError::InvalidArgument(_) => StatusCode::BAD_REQUEST,
             // 423 Locked is the right semantic — the resource exists
@@ -69,6 +77,7 @@ impl ApiError {
             ApiError::Unauthorized => "unauthorized",
             ApiError::CsrfFailed => "csrf_failed",
             ApiError::NotFound => "not_found",
+            ApiError::Forbidden => "forbidden",
             ApiError::Conflict(_) => "conflict",
             ApiError::InvalidArgument(_) => "invalid_argument",
             ApiError::VaultLocked => "vault_locked",
@@ -103,6 +112,7 @@ impl IntoResponse for ApiError {
                     ApiError::Unauthorized => "authentication required".into(),
                     ApiError::CsrfFailed => "csrf token missing or invalid".into(),
                     ApiError::NotFound => "resource not found".into(),
+                    ApiError::Forbidden => "operation not permitted for current role".into(),
                     ApiError::Conflict(m) => (*m).to_string(),
                     ApiError::InvalidArgument(m) => m.clone(),
                     ApiError::VaultLocked => {

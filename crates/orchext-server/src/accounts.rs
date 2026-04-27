@@ -6,10 +6,15 @@
 //! live Postgres. Migrating to `query!` + `cargo sqlx prepare` is a
 //! follow-up once CI has a DB available.
 
-use crate::{error::ApiError, password};
+use crate::{
+    config::DeploymentMode,
+    error::ApiError,
+    orgs::{self, SignupOutcome},
+    password,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
+use sqlx::{FromRow, PgConnection, PgPool};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -40,7 +45,21 @@ pub struct SignupInput {
 /// password policy story.
 const MIN_PASSWORD_LEN: usize = 8;
 
-pub async fn signup(db: &PgPool, input: SignupInput) -> Result<Account, ApiError> {
+/// Result of a successful signup. Returns the new account plus the
+/// org-assignment outcome (became owner of a new org, or landed in
+/// pending_signups awaiting approval). Caller (auth handler) issues a
+/// session regardless — the awaiting-approval state is reflected in
+/// the next `/v1/orgs` call rather than gating session issuance.
+pub struct SignupResult {
+    pub account: Account,
+    pub outcome: SignupOutcome,
+}
+
+pub async fn signup(
+    db: &PgPool,
+    deployment_mode: DeploymentMode,
+    input: SignupInput,
+) -> Result<SignupResult, ApiError> {
     let email = normalize_email(&input.email)?;
     if input.password.chars().count() < MIN_PASSWORD_LEN {
         return Err(ApiError::InvalidArgument(format!(
@@ -77,9 +96,9 @@ pub async fn signup(db: &PgPool, input: SignupInput) -> Result<Account, ApiError
     .await
     .map_err(map_account_insert)?;
 
-    // Bootstrap a personal tenant for this account. 2b.2+ workspace
-    // endpoints route through `tenant_id`; doing this now keeps the
-    // invariant "every account has at least one tenant they own."
+    // Bootstrap a personal tenant for this account. Workspace endpoints
+    // route through `tenant_id`; doing this now keeps the invariant
+    // "every account has at least one tenant they own."
     let tenant_row: (Uuid,) = sqlx::query_as(
         r#"
         INSERT INTO tenants (name, kind)
@@ -102,9 +121,17 @@ pub async fn signup(db: &PgPool, input: SignupInput) -> Result<Account, ApiError
     .execute(&mut *tx)
     .await?;
 
+    // Org assignment per D17d. Self-hosted: first user → owner of
+    // singleton; subsequent → pending. SaaS: domain-match → pending,
+    // new domain → owner of new org claiming that domain.
+    let outcome = match deployment_mode {
+        DeploymentMode::SelfHosted => orgs::bootstrap_self_hosted(&mut tx, &account).await?,
+        DeploymentMode::Saas => orgs::bootstrap_saas(&mut tx, &account, &email).await?,
+    };
+
     tx.commit().await?;
 
-    Ok(account)
+    Ok(SignupResult { account, outcome })
 }
 
 /// Fetch an account by id. Returns `Unauthorized` if missing, matching
@@ -115,6 +142,18 @@ pub async fn by_id(db: &PgPool, id: Uuid) -> Result<Account, ApiError> {
     )
     .bind(id)
     .fetch_optional(db)
+    .await?;
+    account.ok_or(ApiError::Unauthorized)
+}
+
+/// Same as [`by_id`] but takes a connection (so it can run inside an
+/// in-flight transaction). Used by `orgs::create_org`.
+pub async fn by_id_in(conn: &mut PgConnection, id: Uuid) -> Result<Account, ApiError> {
+    let account: Option<Account> = sqlx::query_as(
+        "SELECT id, email, display_name, created_at FROM accounts WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(conn)
     .await?;
     account.ok_or(ApiError::Unauthorized)
 }

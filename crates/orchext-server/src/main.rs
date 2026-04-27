@@ -25,7 +25,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     orchext_server::migrate(&db).await?;
     tracing::info!("migrations applied");
 
-    let state = AppState::new(db).with_secure_cookies(config.secure_cookies);
+    let state = AppState::new(db)
+        .with_secure_cookies(config.secure_cookies)
+        .with_deployment_mode(config.deployment_mode);
     let mut app = router(state);
     if let Some(cors) = orchext_server::cors_layer(&config.cors_allow_origins) {
         tracing::info!(

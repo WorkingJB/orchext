@@ -6,6 +6,17 @@
 
 use std::env;
 
+/// Drives the signup flow's org-assignment rule (Phase 3 D17d).
+/// Self-hosted: first signup → owner of the singleton org; subsequent
+/// signups → pending_signups for that singleton. SaaS: first signup of
+/// a new email domain → owner of a new org claiming that domain;
+/// matching-domain signups → pending for the existing org.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeploymentMode {
+    SelfHosted,
+    Saas,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database_url: String,
@@ -23,6 +34,8 @@ pub struct Config {
     /// empty; self-hosters who serve the web app from a different
     /// origin set the comma-separated list here.
     pub cors_allow_origins: Vec<String>,
+    /// `self_hosted` (default) or `saas`. See `DeploymentMode`.
+    pub deployment_mode: DeploymentMode,
 }
 
 impl Config {
@@ -47,6 +60,16 @@ impl Config {
                     .collect()
             })
             .unwrap_or_default();
+        let deployment_mode = match env::var("ORCHEXT_DEPLOYMENT_MODE")
+            .ok()
+            .as_deref()
+        {
+            Some("saas") => DeploymentMode::Saas,
+            None | Some("") | Some("self_hosted") => DeploymentMode::SelfHosted,
+            Some(other) => {
+                return Err(ConfigError::InvalidDeploymentMode(other.to_string()))
+            }
+        };
 
         Ok(Config {
             database_url,
@@ -54,6 +77,7 @@ impl Config {
             db_max_connections,
             secure_cookies,
             cors_allow_origins,
+            deployment_mode,
         })
     }
 }
@@ -62,4 +86,6 @@ impl Config {
 pub enum ConfigError {
     #[error("required environment variable not set: {0}")]
     Missing(&'static str),
+    #[error("ORCHEXT_DEPLOYMENT_MODE must be 'self_hosted' or 'saas', got '{0}'")]
+    InvalidDeploymentMode(String),
 }
