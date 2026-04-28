@@ -8,8 +8,16 @@ import { MembersView } from "./MembersView";
 import { OrgSettingsView } from "./OrgSettingsView";
 import { TeamsView } from "./TeamsView";
 import { AccountSettingsView } from "./AccountSettingsView";
+import { AppearanceView } from "./AppearanceView";
 
-type Tab = "account" | "members" | "teams" | "org" | "tokens" | "audit";
+type Tab =
+  | "account"
+  | "members"
+  | "teams"
+  | "org"
+  | "tokens"
+  | "audit"
+  | "appearance";
 
 /// Settings hub. Wraps the per-feature views (Account, Members, Org
 /// settings, Tokens, Audit) under a single top-level nav slot so the
@@ -61,6 +69,7 @@ export function SettingsView({
     }
     tabs.push("tokens");
     tabs.push("audit");
+    tabs.push("appearance");
     return tabs;
   }, [isOrg, isAdmin]);
 
@@ -76,7 +85,7 @@ export function SettingsView({
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="border-b border-neutral-200 bg-white px-4 flex items-center gap-1">
+      <div className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 flex items-center gap-1">
         {availableTabs.map((t) => (
           <SubTab
             key={t}
@@ -107,6 +116,7 @@ export function SettingsView({
         )}
         {tab === "tokens" && <TokensView tenant={tenant} />}
         {tab === "audit" && <AuditView tenant={tenant} />}
+        {tab === "appearance" && <AppearanceView />}
       </div>
     </div>
   );
@@ -119,6 +129,7 @@ const LABELS: Record<Tab, string> = {
   org: "Organization",
   tokens: "Tokens",
   audit: "Audit",
+  appearance: "Appearance",
 };
 
 function SubTab({
@@ -136,8 +147,8 @@ function SubTab({
       className={
         "px-3 py-2.5 text-sm border-b-2 transition -mb-px " +
         (active
-          ? "border-brand-500 text-brand-700 font-medium"
-          : "border-transparent text-neutral-600 hover:text-neutral-900")
+          ? "border-brand-500 text-brand-700 dark:text-brand-500 font-medium"
+          : "border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100")
       }
     >
       {label}

@@ -60,13 +60,13 @@ export function Layout({
 
   return (
     <div className="h-full flex flex-col">
-      <header className="border-b border-neutral-200 bg-white px-4 h-12 flex items-center gap-3">
+      <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 h-12 flex items-center gap-3">
         <span className="font-semibold">Orchext</span>
-        <span className="text-neutral-400">·</span>
-        <span className="text-sm text-neutral-700">
+        <span className="text-neutral-400 dark:text-neutral-500">·</span>
+        <span className="text-sm text-neutral-700 dark:text-neutral-300">
           {activeCtx ? badgeLabel(activeCtx) : activeVault.name}
         </span>
-        <span className="ml-auto text-xs text-neutral-500 font-mono truncate max-w-[40ch]">
+        <span className="ml-auto text-xs text-neutral-500 dark:text-neutral-400 font-mono truncate max-w-[40ch]">
           {activeVault.root}
         </span>
       </header>
@@ -78,7 +78,7 @@ export function Layout({
           onAdd={onAdd}
         />
         {!onboardingActive && (
-          <nav className="w-44 border-r border-neutral-200 bg-white p-2 flex flex-col gap-1">
+          <nav className="w-44 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-2 flex flex-col gap-1">
             <NavBtn
               label="Documents"
               active={view === "documents"}
@@ -91,7 +91,7 @@ export function Layout({
             />
           </nav>
         )}
-        <main key={activeVault.workspace_id} className="flex-1 min-w-0 bg-neutral-50">
+        <main key={activeVault.workspace_id} className="flex-1 min-w-0 bg-neutral-50 dark:bg-neutral-900">
           {view === "onboarding" && (
             <OnboardingView
               onComplete={async () => {
@@ -147,8 +147,8 @@ function NavBtn({
       className={
         "text-left px-3 py-2 rounded-md text-sm transition " +
         (active
-          ? "bg-brand-50 text-brand-700 font-medium"
-          : "text-neutral-700 hover:bg-neutral-100")
+          ? "bg-brand-50 dark:bg-brand-700/20 text-brand-700 dark:text-brand-500 font-medium"
+          : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800")
       }
     >
       {label}

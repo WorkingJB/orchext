@@ -128,7 +128,7 @@ export function OrgSettingsView({
 
   if (!org && !error) {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
+      <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
         Loading settings…
       </div>
     );
@@ -142,7 +142,7 @@ export function OrgSettingsView({
         </header>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-md p-3">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-md p-3">
             {error}
           </div>
         )}
@@ -150,21 +150,21 @@ export function OrgSettingsView({
         {org && (
           <form
             onSubmit={save}
-            className="bg-white border border-neutral-200 rounded-md p-5 space-y-4"
+            className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md p-5 space-y-4"
           >
             <Field label="Name">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full border border-neutral-300 rounded px-3 py-2 text-sm"
+                className="w-full border border-neutral-300 dark:border-neutral-700 rounded px-3 py-2 text-sm"
                 disabled={busy}
               />
             </Field>
 
             <Field label="Logo">
               <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-md border border-neutral-200 bg-neutral-50 overflow-hidden flex items-center justify-center text-xs text-neutral-400">
+                <div className="w-14 h-14 rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 overflow-hidden flex items-center justify-center text-xs text-neutral-400 dark:text-neutral-500">
                   {logoData ? (
                     <img
                       src={logoData.data_url}
@@ -189,14 +189,14 @@ export function OrgSettingsView({
                       type="button"
                       onClick={removeLogo}
                       disabled={logoBusy !== null}
-                      className="text-xs text-red-700 hover:underline self-start disabled:opacity-50"
+                      className="text-xs text-red-700 dark:text-red-400 hover:underline self-start disabled:opacity-50"
                     >
                       {logoBusy === "removing" ? "Removing…" : "Remove logo"}
                     </button>
                   )}
                 </div>
               </div>
-              <p className="text-xs text-neutral-500 mt-2">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
                 PNG, JPEG, GIF, or WEBP up to 512KB. Shown as the
                 org&apos;s avatar in the left rail.
               </p>
@@ -207,9 +207,9 @@ export function OrgSettingsView({
                 type="text"
                 value={renderAllowedDomains(org.allowed_domains)}
                 disabled
-                className="w-full border border-neutral-200 rounded px-3 py-2 text-sm bg-neutral-50 text-neutral-500"
+                className="w-full border border-neutral-200 dark:border-neutral-800 rounded px-3 py-2 text-sm bg-neutral-50 dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400"
               />
-              <p className="text-xs text-neutral-500 mt-1">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 Available when email infra ships — auto-join from a
                 matching corporate email currently still goes through
                 the approval queue.
@@ -225,7 +225,7 @@ export function OrgSettingsView({
                 {busy ? "Saving…" : "Save changes"}
               </button>
               {savedAt !== null && !busy && (
-                <span className="text-xs text-neutral-500">Saved.</span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">Saved.</span>
               )}
             </div>
           </form>
@@ -249,7 +249,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-neutral-700 mb-1">
+      <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
         {label}
       </span>
       {children}

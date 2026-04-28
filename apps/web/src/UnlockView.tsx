@@ -88,12 +88,12 @@ export function UnlockView({
     <div className="h-full flex items-center justify-center p-6">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm bg-white border border-neutral-200 rounded-lg p-6 shadow-sm"
+        className="w-full max-w-sm bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-6 shadow-sm"
       >
         <h2 className="text-lg font-semibold mb-1">
           {seeding ? "Set a workspace passphrase" : "Unlock workspace"}
         </h2>
-        <p className="text-sm text-neutral-500 mb-4">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
           {seeding
             ? "This passphrase encrypts every document in the workspace. It can't be recovered if lost."
             : `Enter the passphrase for ${tenant.name}.`}
@@ -107,7 +107,7 @@ export function UnlockView({
           autoFocus
           value={passphrase}
           onChange={(e) => setPassphrase(e.target.value)}
-          className="w-full border border-neutral-300 rounded-md px-3 py-2 mb-3 text-sm"
+          className="w-full border border-neutral-300 dark:border-neutral-700 rounded-md px-3 py-2 mb-3 text-sm"
         />
 
         {seeding && (
@@ -119,13 +119,13 @@ export function UnlockView({
               minLength={8}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full border border-neutral-300 rounded-md px-3 py-2 mb-3 text-sm"
+              className="w-full border border-neutral-300 dark:border-neutral-700 rounded-md px-3 py-2 mb-3 text-sm"
             />
           </>
         )}
 
         {error && (
-          <div className="text-sm text-red-600 mb-3" role="alert">
+          <div className="text-sm text-red-600 dark:text-red-400 mb-3" role="alert">
             {error}
           </div>
         )}
@@ -144,7 +144,7 @@ export function UnlockView({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-full flex items-center justify-center text-neutral-500">
+    <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
       {children}
     </div>
   );

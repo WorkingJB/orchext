@@ -154,7 +154,7 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
             </button>
             <button
               onClick={() => void reload()}
-              className="text-xs text-neutral-500 hover:text-neutral-900"
+              className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
             >
               Refresh
             </button>
@@ -162,11 +162,11 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
         </header>
 
         {showInvite && (
-          <div className="bg-white border border-neutral-200 rounded-md p-4 space-y-3">
-            <h2 className="text-sm font-medium text-neutral-700">
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md p-4 space-y-3">
+            <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
               Add member by email
             </h2>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
               They&apos;ll join automatically when they sign up with this
               email — no email is sent. Until they sign up, you can revoke
               the invitation below.
@@ -177,12 +177,12 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="alice@example.com"
-                className="flex-1 px-3 py-1.5 border border-neutral-300 rounded text-sm"
+                className="flex-1 px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-sm"
               />
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as Role)}
-                className="px-2 py-1.5 border border-neutral-300 rounded text-sm bg-white"
+                className="px-2 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-sm bg-white dark:bg-neutral-900"
               >
                 {ROLES.filter((r) => callerIsOwner || r !== "owner").map(
                   (r) => (
@@ -204,28 +204,28 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-md p-3">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-md p-3">
             {error}
           </div>
         )}
 
         <section>
-          <h2 className="text-sm font-medium text-neutral-700 mb-2">
+          <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
             Pending requests
             {pending && pending.length > 0 && (
-              <span className="ml-2 text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">
+              <span className="ml-2 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 rounded-full px-2 py-0.5">
                 {pending.length}
               </span>
             )}
           </h2>
           {pending === null ? (
-            <p className="text-sm text-neutral-500">Loading…</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</p>
           ) : pending.length === 0 ? (
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               No pending requests.
             </p>
           ) : (
-            <ul className="bg-white border border-neutral-200 rounded-md divide-y divide-neutral-100">
+            <ul className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md divide-y divide-neutral-100 dark:divide-neutral-800">
               {pending.map((p) => (
                 <PendingRow
                   key={p.id}
@@ -241,22 +241,22 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
         </section>
 
         <section>
-          <h2 className="text-sm font-medium text-neutral-700 mb-2">
+          <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
             Open invitations
             {invitations && invitations.length > 0 && (
-              <span className="ml-2 text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-0.5">
+              <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded-full px-2 py-0.5">
                 {invitations.length}
               </span>
             )}
           </h2>
           {invitations === null ? (
-            <p className="text-sm text-neutral-500">Loading…</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</p>
           ) : invitations.length === 0 ? (
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               No open invitations.
             </p>
           ) : (
-            <ul className="bg-white border border-neutral-200 rounded-md divide-y divide-neutral-100">
+            <ul className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md divide-y divide-neutral-100 dark:divide-neutral-800">
               {invitations.map((inv) => (
                 <li
                   key={inv.id}
@@ -266,7 +266,7 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
                     <div className="text-sm font-medium truncate">
                       {inv.email}
                     </div>
-                    <div className="text-xs text-neutral-500 truncate">
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
                       Will join as <strong>{inv.role}</strong> · invited{" "}
                       {new Date(inv.invited_at).toLocaleDateString()}
                     </div>
@@ -274,7 +274,7 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
                   <button
                     onClick={() => void revokeInvitation(inv.id)}
                     disabled={busy === inv.id}
-                    className="text-xs px-2 py-1 rounded border border-neutral-300 text-neutral-700 hover:bg-red-50 hover:text-red-700 hover:border-red-300 disabled:opacity-50"
+                    className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-800 disabled:opacity-50"
                   >
                     Revoke
                   </button>
@@ -285,13 +285,13 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
         </section>
 
         <section>
-          <h2 className="text-sm font-medium text-neutral-700 mb-2">
+          <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
             Members
           </h2>
           {members === null ? (
-            <p className="text-sm text-neutral-500">Loading…</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</p>
           ) : (
-            <ul className="bg-white border border-neutral-200 rounded-md divide-y divide-neutral-100">
+            <ul className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md divide-y divide-neutral-100 dark:divide-neutral-800">
               {members.map((m) => {
                 // Last-owner self-remove guard (UI-side; the server
                 // also returns 409 here). If you're the only owner of
@@ -341,7 +341,7 @@ function PendingRow({
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{row.display_name}</div>
-        <div className="text-xs text-neutral-500 truncate">
+        <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
           {row.email} · requested{" "}
           {new Date(row.requested_at).toLocaleDateString()}
         </div>
@@ -362,7 +362,7 @@ function PendingRow({
       <button
         onClick={onReject}
         disabled={busy}
-        className="text-xs px-2 py-1 rounded border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+        className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50"
       >
         Reject
       </button>
@@ -393,11 +393,11 @@ function MemberRow({
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{row.display_name}</div>
-        <div className="text-xs text-neutral-500 truncate">{row.email}</div>
+        <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">{row.email}</div>
       </div>
       {locked ? (
         <span
-          className="text-xs text-neutral-500 italic"
+          className="text-xs text-neutral-500 dark:text-neutral-400 italic"
           title="The org must retain at least one owner. Promote another member to owner before changing your role."
         >
           {row.role} (only owner)
@@ -413,7 +413,7 @@ function MemberRow({
           <button
             onClick={onRemove}
             disabled={busy}
-            className="text-xs px-2 py-1 rounded border border-neutral-300 text-neutral-700 hover:bg-red-50 hover:text-red-700 hover:border-red-300 disabled:opacity-50"
+            className="text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-800 disabled:opacity-50"
           >
             Remove
           </button>
@@ -446,7 +446,7 @@ function RoleSelect({
       value={value}
       onChange={(e) => onChange(e.target.value as Role)}
       disabled={disabled}
-      className="text-xs border border-neutral-300 rounded px-2 py-1 bg-white"
+      className="text-xs border border-neutral-300 dark:border-neutral-700 rounded px-2 py-1 bg-white dark:bg-neutral-900"
     >
       {visible.map((r) => (
         <option key={r} value={r}>

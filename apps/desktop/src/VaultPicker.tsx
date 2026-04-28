@@ -48,9 +48,9 @@ export function VaultPicker({
   if (mode === "remote") {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-sm border border-neutral-200">
-          <h1 className="text-2xl font-semibold text-neutral-900 mb-2">{title}</h1>
-          <p className="text-neutral-600 mb-6 text-sm">
+        <div className="max-w-md w-full p-8 bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800">
+          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{title}</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mb-6 text-sm">
             Connect to an Orchext server. Sign in with your existing
             account; if your account is awaiting admin approval,
             you&apos;ll be told here.
@@ -62,7 +62,7 @@ export function VaultPicker({
             onError={setErr}
           />
           {err && (
-            <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">
               {err}
             </div>
           )}
@@ -73,9 +73,9 @@ export function VaultPicker({
 
   return (
     <div className="h-full flex items-center justify-center">
-      <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-sm border border-neutral-200">
-        <h1 className="text-2xl font-semibold text-neutral-900 mb-2">{title}</h1>
-        <p className="text-neutral-600 mb-6 text-sm">
+      <div className="max-w-md w-full p-8 bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-800">
+        <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{title}</h1>
+        <p className="text-neutral-600 dark:text-neutral-400 mb-6 text-sm">
           Add a workspace. Local vaults live entirely on this machine;
           remote workspaces connect to an Orchext server and surface
           your personal vault plus any organizations you&apos;ve been
@@ -91,20 +91,20 @@ export function VaultPicker({
         <button
           onClick={() => setMode("remote")}
           disabled={busy}
-          className="mt-3 w-full bg-white border border-neutral-300 text-neutral-800 py-2.5 px-4 rounded-lg hover:bg-neutral-50 transition disabled:opacity-50"
+          className="mt-3 w-full bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 py-2.5 px-4 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition disabled:opacity-50"
         >
           Connect to a server…
         </button>
         {onCancel && (
           <button
             onClick={onCancel}
-            className="mt-3 w-full text-sm text-neutral-500 hover:text-neutral-900 py-2"
+            className="mt-3 w-full text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 py-2"
           >
             Cancel
           </button>
         )}
         {err && (
-          <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">
             {err}
           </div>
         )}
@@ -170,7 +170,7 @@ function RemoteConnectForm({
           value={serverUrl}
           onChange={(e) => setServerUrl(e.target.value)}
           placeholder="https://orchext.example.com"
-          className="w-full px-3 py-2 border border-neutral-300 rounded text-sm"
+          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded text-sm"
           disabled={busy}
         />
       </Field>
@@ -179,7 +179,7 @@ function RemoteConnectForm({
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-300 rounded text-sm"
+          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded text-sm"
           disabled={busy}
         />
       </Field>
@@ -188,7 +188,7 @@ function RemoteConnectForm({
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2 border border-neutral-300 rounded text-sm"
+          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded text-sm"
           disabled={busy}
         />
       </Field>
@@ -203,7 +203,7 @@ function RemoteConnectForm({
         <button
           type="button"
           onClick={onCancel}
-          className="text-sm text-neutral-500 hover:text-neutral-900"
+          className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
         >
           Back
         </button>
@@ -221,7 +221,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-neutral-700 mb-1">
+      <span className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
         {label}
       </span>
       {children}

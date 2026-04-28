@@ -101,7 +101,7 @@ export default function App() {
 
   if (state.kind === "bootstrapping") {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
+      <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
         Loading…
       </div>
     );

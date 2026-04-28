@@ -171,9 +171,9 @@ export function DocumentsView({
     <div className="flex h-full min-h-0">
       {/* Section sidebar — only in org workspace. */}
       {isOrg && (
-        <aside className="w-44 border-r border-neutral-200 bg-white overflow-y-auto">
+        <aside className="w-44 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto">
           <div className="p-2">
-            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1 px-1">
+            <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1 px-1">
               Section
             </div>
             <SectionBtn
@@ -210,10 +210,10 @@ export function DocumentsView({
       )}
 
       {/* Doc list */}
-      <section className="w-80 border-r border-neutral-200 bg-white overflow-y-auto">
-        <div className="p-2 border-b border-neutral-200 space-y-2">
+      <section className="w-80 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto">
+        <div className="p-2 border-b border-neutral-200 dark:border-neutral-800 space-y-2">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-neutral-600">
+            <div className="text-sm text-neutral-600 dark:text-neutral-400">
               {visible.length} document{visible.length === 1 ? "" : "s"}
             </div>
             <button
@@ -221,7 +221,7 @@ export function DocumentsView({
                 setSelectedId(null);
                 setCreating(true);
               }}
-              className="text-sm text-brand-600 hover:text-brand-700"
+              className="text-sm text-brand-600 dark:text-brand-500 hover:text-brand-700"
             >
               + New
             </button>
@@ -229,7 +229,7 @@ export function DocumentsView({
           <select
             value={typeFilter ?? ""}
             onChange={(e) => setTypeFilter(e.target.value || null)}
-            className="w-full px-2 py-1 border border-neutral-300 rounded text-xs bg-white"
+            className="w-full px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded text-xs bg-white dark:bg-neutral-900"
           >
             <option value="">All types ({sectionItems.length})</option>
             {types.map((t) => {
@@ -249,7 +249,7 @@ export function DocumentsView({
                 setTeamFilter(next);
                 if (next) setSection("all");
               }}
-              className="w-full px-2 py-1 border border-neutral-300 rounded text-xs bg-white"
+              className="w-full px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded text-xs bg-white dark:bg-neutral-900"
             >
               <option value="">All teams</option>
               {teams.map((t) => (
@@ -261,8 +261,8 @@ export function DocumentsView({
           )}
         </div>
         {visible.length === 0 && (
-          <div className="p-6 text-sm text-neutral-500 text-center">
-            No documents yet. Click <span className="text-brand-600">+ New</span>{" "}
+          <div className="p-6 text-sm text-neutral-500 dark:text-neutral-400 text-center">
+            No documents yet. Click <span className="text-brand-600 dark:text-brand-500">+ New</span>{" "}
             to create one.
           </div>
         )}
@@ -274,16 +274,16 @@ export function DocumentsView({
               setCreating(false);
             }}
             className={
-              "block w-full text-left px-3 py-2 border-b border-neutral-100 " +
-              (selectedId === item.id ? "bg-brand-50" : "hover:bg-neutral-50")
+              "block w-full text-left px-3 py-2 border-b border-neutral-100 dark:border-neutral-800 " +
+              (selectedId === item.id ? "bg-brand-50 dark:bg-brand-700/20" : "hover:bg-neutral-50 dark:hover:bg-neutral-800")
             }
           >
             <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-sm font-medium text-neutral-900 truncate">
+              <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
                 {item.title}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-neutral-500">
+            <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
               <span className="font-mono">{item.id}</span>
               <VisibilityChip v={item.visibility} />
             </div>
@@ -294,7 +294,7 @@ export function DocumentsView({
       {/* Detail */}
       <section className="flex-1 min-w-0 overflow-y-auto">
         {error && (
-          <div className="m-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+          <div className="m-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">
             {error}
           </div>
         )}
@@ -347,7 +347,7 @@ export function DocumentsView({
           </>
         )}
         {!creating && !detail && (
-          <div className="h-full flex items-center justify-center text-neutral-400 text-sm">
+          <div className="h-full flex items-center justify-center text-neutral-400 dark:text-neutral-500 text-sm">
             Select a document or create a new one.
           </div>
         )}
@@ -370,8 +370,8 @@ function ProposalBanner({
   onReview: () => void;
 }) {
   return (
-    <div className="mx-6 mt-6 mb-0 px-4 py-3 bg-amber-50 border border-amber-200 rounded-md flex items-center justify-between gap-3">
-      <div className="text-sm text-amber-900">
+    <div className="mx-6 mt-6 mb-0 px-4 py-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md flex items-center justify-between gap-3">
+      <div className="text-sm text-amber-900 dark:text-amber-200">
         <strong>
           {count} pending proposal{count === 1 ? "" : "s"}
         </strong>{" "}
@@ -404,12 +404,12 @@ function SectionBtn({
       className={
         "w-full flex items-center justify-between text-left text-sm px-3 py-1.5 rounded " +
         (active
-          ? "bg-brand-50 text-brand-700 font-medium"
-          : "text-neutral-700 hover:bg-neutral-100")
+          ? "bg-brand-50 dark:bg-brand-700/20 text-brand-700 dark:text-brand-500 font-medium"
+          : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800")
       }
     >
       <span className="truncate">{label}</span>
-      <span className="text-xs text-neutral-400 ml-2">{count}</span>
+      <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-2">{count}</span>
     </button>
   );
 }
@@ -417,18 +417,18 @@ function SectionBtn({
 function VisibilityChip({ v }: { v: string }) {
   const color =
     v === "private"
-      ? "bg-red-100 text-red-700"
+      ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
       : v === "personal"
-      ? "bg-amber-100 text-amber-700"
+      ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
       : v === "work"
-      ? "bg-blue-100 text-blue-700"
+      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
       : v === "public"
-      ? "bg-green-100 text-green-700"
+      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
       : v === "org"
-      ? "bg-violet-100 text-violet-700"
+      ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
       : v === "team"
-      ? "bg-indigo-100 text-indigo-700"
-      : "bg-neutral-100 text-neutral-700";
+      ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
+      : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300";
   return (
     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${color}`}>
       {v}
@@ -610,7 +610,7 @@ function DocEditor({
           {onCancel && (
             <button
               onClick={onCancel}
-              className="px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 rounded"
+              className="px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
             >
               Cancel
             </button>
@@ -619,7 +619,7 @@ function DocEditor({
             <button
               onClick={del}
               disabled={busy}
-              className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+              className="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded disabled:opacity-50"
             >
               Delete
             </button>
@@ -635,7 +635,7 @@ function DocEditor({
             <span
               role="status"
               aria-live="polite"
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded"
             >
               <span aria-hidden="true">✓</span>
               <span>Saved</span>
@@ -650,7 +650,7 @@ function DocEditor({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="A short, human-readable title"
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-base"
+            className="w-full px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-base"
           />
         </Field>
       </div>
@@ -665,14 +665,14 @@ function DocEditor({
             }}
             disabled={!isNew}
             placeholder="auto-derived from title"
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm font-mono disabled:bg-neutral-100"
+            className="w-full px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-sm font-mono disabled:bg-neutral-100 dark:disabled:bg-neutral-800"
           />
         </Field>
         <Field label="Type">
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm bg-white"
+            className="w-full px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-sm bg-white dark:bg-neutral-900"
           >
             {!type && (
               <option value="" disabled>
@@ -690,7 +690,7 @@ function DocEditor({
           <select
             value={visibility}
             onChange={(e) => setVisibility(e.target.value)}
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
+            className="w-full px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-sm"
           >
             {visibilityOptions.map((v) => (
               <option key={v} value={v}>
@@ -698,7 +698,7 @@ function DocEditor({
               </option>
             ))}
           </select>
-          <p className="text-xs text-neutral-500 mt-1">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
             {audienceCopy(visibility, isOrg, ctxName, teamId, teams)}
           </p>
         </Field>
@@ -707,7 +707,7 @@ function DocEditor({
             <select
               value={teamId ?? ""}
               onChange={(e) => setTeamId(e.target.value || null)}
-              className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
+              className="w-full px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-sm"
             >
               {!teamId && (
                 <option value="" disabled>
@@ -735,7 +735,7 @@ function DocEditor({
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="manager, acme"
-            className="w-full px-3 py-1.5 border border-neutral-300 rounded text-sm"
+            className="w-full px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 rounded text-sm"
           />
         </Field>
       </div>
@@ -749,14 +749,14 @@ function DocEditor({
       </Field>
 
       {!isNew && initial && (
-        <div className="mt-4 pt-4 border-t border-neutral-200 text-xs text-neutral-500 font-mono">
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-800 text-xs text-neutral-500 dark:text-neutral-400 font-mono">
           {initial.version}
           {initial.updated && ` · updated ${initial.updated}`}
         </div>
       )}
 
       {err && (
-        <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+        <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">
           {err}
         </div>
       )}
@@ -848,7 +848,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-xs text-neutral-600 mb-1">{label}</span>
+      <span className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">{label}</span>
       {children}
     </label>
   );

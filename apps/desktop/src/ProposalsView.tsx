@@ -69,7 +69,7 @@ export function ProposalsView({
           <FilterTabs value={filter} onChange={setFilter} />
           <button
             onClick={() => void refresh()}
-            className="text-xs text-neutral-500 hover:text-neutral-900"
+            className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
           >
             Refresh
           </button>
@@ -77,13 +77,13 @@ export function ProposalsView({
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">
           {error}
         </div>
       )}
 
       {filtered && filtered.length === 0 && (
-        <div className="bg-white border border-neutral-200 rounded-lg p-8 text-center text-neutral-500 text-sm">
+        <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-8 text-center text-neutral-500 dark:text-neutral-400 text-sm">
           {focusDocId
             ? `No ${filter === "pending" ? "pending" : filter} proposals for this document.`
             : filter === "pending"
@@ -121,7 +121,7 @@ function FilterTabs({
     { id: "all", label: "All" },
   ];
   return (
-    <div className="flex rounded-md border border-neutral-200 bg-white text-xs overflow-hidden">
+    <div className="flex rounded-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs overflow-hidden">
       {opts.map((o) => (
         <button
           key={o.id}
@@ -129,8 +129,8 @@ function FilterTabs({
           className={
             "px-2.5 py-1 transition " +
             (value === o.id
-              ? "bg-brand-50 text-brand-700 font-medium"
-              : "text-neutral-600 hover:bg-neutral-50")
+              ? "bg-brand-50 dark:bg-brand-700/20 text-brand-700 dark:text-brand-500 font-medium"
+              : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800")
           }
         >
           {o.label}
@@ -153,30 +153,30 @@ function ProposalCard({
 }) {
   const ageMs = Date.now() - new Date(proposal.created_at).getTime();
   return (
-    <div className="bg-white border border-neutral-200 rounded-lg p-4">
+    <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-sm text-neutral-800 truncate">
+            <span className="font-mono text-sm text-neutral-800 dark:text-neutral-200 truncate">
               {proposal.doc_id}
             </span>
             <StatusBadge status={proposal.status} />
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-neutral-500 dark:text-neutral-400">
               {formatAge(ageMs)} ago
             </span>
           </div>
-          <div className="mt-1 text-xs text-neutral-500">
+          <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             from{" "}
             <span className="font-mono">{proposal.actor_token_label}</span>
             {proposal.actor_token_id && (
-              <span className="text-neutral-400">
+              <span className="text-neutral-400 dark:text-neutral-500">
                 {" "}
                 ({proposal.actor_token_id})
               </span>
             )}
           </div>
           {proposal.reason && (
-            <p className="mt-2 text-sm text-neutral-700 italic">
+            <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300 italic">
               "{proposal.reason}"
             </p>
           )}
@@ -193,7 +193,7 @@ function ProposalCard({
             <button
               disabled={busy}
               onClick={onReject}
-              className="px-3 py-1 text-xs rounded border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+              className="px-3 py-1 text-xs rounded border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50"
             >
               Reject
             </button>
@@ -204,7 +204,7 @@ function ProposalCard({
       <PatchPreview proposal={proposal} />
 
       {proposal.status !== "pending" && (
-        <div className="mt-3 pt-3 border-t border-neutral-100 text-xs text-neutral-500">
+        <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-xs text-neutral-500 dark:text-neutral-400">
           {proposal.status === "approved" ? "Approved" : "Rejected"}{" "}
           {proposal.decided_at &&
             new Date(proposal.decided_at).toLocaleString()}
@@ -228,10 +228,10 @@ function ProposalCard({
 function StatusBadge({ status }: { status: Proposal["status"] }) {
   const cls =
     status === "pending"
-      ? "bg-amber-100 text-amber-700"
+      ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
       : status === "approved"
-      ? "bg-green-100 text-green-700"
-      : "bg-neutral-100 text-neutral-600";
+      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+      : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400";
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded ${cls}`}>
       {status}
@@ -251,7 +251,7 @@ function PatchPreview({ proposal }: { proposal: Proposal }) {
 
   if (!hasFm && !bodyOp) {
     return (
-      <p className="mt-3 text-xs text-neutral-500 italic">
+      <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400 italic">
         Empty patch (no frontmatter or body changes).
       </p>
     );
@@ -260,20 +260,20 @@ function PatchPreview({ proposal }: { proposal: Proposal }) {
     <div className="mt-3 space-y-2">
       {hasFm && (
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+          <div className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
             Frontmatter merge
           </div>
-          <pre className="text-xs bg-neutral-50 border border-neutral-200 rounded p-2 overflow-x-auto font-mono">
+          <pre className="text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded p-2 overflow-x-auto font-mono">
             {JSON.stringify(patch.frontmatter, null, 2)}
           </pre>
         </div>
       )}
       {bodyOp && (
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
+          <div className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
             Body {bodyOp.kind === "replace" ? "replace" : "append"}
           </div>
-          <pre className="text-xs bg-neutral-50 border border-neutral-200 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+          <pre className="text-xs bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded p-2 overflow-x-auto whitespace-pre-wrap">
             {bodyOp.text}
           </pre>
         </div>

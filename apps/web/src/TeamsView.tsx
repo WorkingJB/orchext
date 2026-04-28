@@ -84,7 +84,7 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
 
   if (!teams && !error) {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
+      <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
         Loading teams…
       </div>
     );
@@ -92,9 +92,9 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
 
   return (
     <div className="h-full flex min-h-0">
-      <aside className="w-64 shrink-0 border-r border-neutral-200 bg-white flex flex-col">
-        <header className="px-3 py-2 border-b border-neutral-200 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-neutral-700">Teams</h2>
+      <aside className="w-64 shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col">
+        <header className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Teams</h2>
           {isOrgAdmin && (
             <button
               type="button"
@@ -108,7 +108,7 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
         {showNew && isOrgAdmin && (
           <form
             onSubmit={createTeam}
-            className="px-3 py-2 border-b border-neutral-200 space-y-2 bg-neutral-50"
+            className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-800 space-y-2 bg-neutral-50 dark:bg-neutral-900"
           >
             <input
               autoFocus
@@ -116,7 +116,7 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Team name"
-              className="w-full border border-neutral-300 rounded px-2 py-1 text-sm"
+              className="w-full border border-neutral-300 dark:border-neutral-700 rounded px-2 py-1 text-sm"
               disabled={busy}
             />
             <div className="flex gap-2">
@@ -133,7 +133,7 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
                   setShowNew(false);
                   setNewName("");
                 }}
-                className="text-xs px-2 py-1 rounded text-neutral-600 hover:bg-neutral-200"
+                className="text-xs px-2 py-1 rounded text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
               >
                 Cancel
               </button>
@@ -142,7 +142,7 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
         )}
         <ul className="flex-1 overflow-auto">
           {teams && teams.length === 0 && (
-            <li className="px-3 py-4 text-xs text-neutral-500">
+            <li className="px-3 py-4 text-xs text-neutral-500 dark:text-neutral-400">
               No teams yet.
             </li>
           )}
@@ -151,17 +151,17 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
               <button
                 onClick={() => setSelected(t.id)}
                 className={
-                  "w-full text-left px-3 py-2 text-sm border-b border-neutral-100 transition " +
+                  "w-full text-left px-3 py-2 text-sm border-b border-neutral-100 dark:border-neutral-800 transition " +
                   (selected === t.id
-                    ? "bg-brand-50 text-brand-700"
-                    : "hover:bg-neutral-50 text-neutral-700")
+                    ? "bg-brand-50 dark:bg-brand-700/20 text-brand-700 dark:text-brand-500"
+                    : "hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300")
                 }
               >
                 <div className="font-medium">{t.name}</div>
-                <div className="text-xs text-neutral-500 flex items-center gap-2">
+                <div className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
                   <span>{t.member_count} members</span>
                   {t.viewer_role && (
-                    <span className="px-1.5 rounded bg-neutral-100 text-neutral-600">
+                    <span className="px-1.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
                       {t.viewer_role}
                     </span>
                   )}
@@ -171,7 +171,7 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
           ))}
         </ul>
         {error && (
-          <div className="text-xs text-red-700 bg-red-50 border-t border-red-200 p-2">
+          <div className="text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border-t border-red-200 dark:border-red-800 p-2">
             {error}
           </div>
         )}
@@ -186,7 +186,7 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
             onDeleted={() => deleteTeam(selected)}
           />
         ) : (
-          <div className="h-full flex items-center justify-center text-neutral-500 text-sm">
+          <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
             {teams && teams.length === 0
               ? "Create a team to start grouping members."
               : "Select a team."}
@@ -344,7 +344,7 @@ function TeamDetail({
                 type="text"
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
-                className="border border-neutral-300 rounded px-2 py-1 text-lg font-semibold flex-1"
+                className="border border-neutral-300 dark:border-neutral-700 rounded px-2 py-1 text-lg font-semibold flex-1"
                 disabled={busy === "rename"}
               />
               <button
@@ -360,7 +360,7 @@ function TeamDetail({
                   setRenameOpen(false);
                   setRenameValue(team.name);
                 }}
-                className="text-xs px-2 py-1 rounded text-neutral-600"
+                className="text-xs px-2 py-1 rounded text-neutral-600 dark:text-neutral-400"
               >
                 Cancel
               </button>
@@ -369,13 +369,13 @@ function TeamDetail({
             <>
               <div>
                 <h1 className="text-xl font-semibold">{team.name}</h1>
-                <p className="text-xs text-neutral-500">slug: {team.slug}</p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">slug: {team.slug}</p>
               </div>
               <div className="flex gap-2">
                 {canManage && (
                   <button
                     onClick={() => setRenameOpen(true)}
-                    className="text-xs px-2 py-1 rounded text-neutral-600 hover:bg-neutral-100"
+                    className="text-xs px-2 py-1 rounded text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                   >
                     Rename
                   </button>
@@ -383,7 +383,7 @@ function TeamDetail({
                 {isOrgAdmin && (
                   <button
                     onClick={onDeleted}
-                    className="text-xs px-2 py-1 rounded text-red-700 hover:bg-red-50"
+                    className="text-xs px-2 py-1 rounded text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                   >
                     Delete
                   </button>
@@ -394,21 +394,21 @@ function TeamDetail({
         </header>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-md p-3">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-md p-3">
             {error}
           </div>
         )}
 
-        <section className="bg-white border border-neutral-200 rounded-md p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-neutral-700">Members</h2>
+        <section className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Members</h2>
           {!members && (
-            <div className="text-sm text-neutral-500">Loading members…</div>
+            <div className="text-sm text-neutral-500 dark:text-neutral-400">Loading members…</div>
           )}
           {members && members.length === 0 && (
-            <div className="text-sm text-neutral-500">No members yet.</div>
+            <div className="text-sm text-neutral-500 dark:text-neutral-400">No members yet.</div>
           )}
           {members && members.length > 0 && (
-            <ul className="divide-y divide-neutral-100">
+            <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
               {members.map((m) => (
                 <li
                   key={m.account_id}
@@ -418,7 +418,7 @@ function TeamDetail({
                     <div className="text-sm font-medium truncate">
                       {m.display_name || m.email}
                     </div>
-                    <div className="text-xs text-neutral-500 truncate">
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
                       {m.email}
                     </div>
                   </div>
@@ -432,13 +432,13 @@ function TeamDetail({
                         )
                       }
                       disabled={busy === m.account_id}
-                      className="text-sm border border-neutral-300 rounded px-2 py-1"
+                      className="text-sm border border-neutral-300 dark:border-neutral-700 rounded px-2 py-1"
                     >
                       <option value="manager">manager</option>
                       <option value="member">member</option>
                     </select>
                   ) : (
-                    <span className="text-xs px-2 py-0.5 rounded bg-neutral-100 text-neutral-600">
+                    <span className="text-xs px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
                       {m.role}
                     </span>
                   )}
@@ -447,7 +447,7 @@ function TeamDetail({
                       type="button"
                       onClick={() => remove(m.account_id)}
                       disabled={busy === m.account_id}
-                      className="text-xs px-2 py-1 rounded text-red-700 hover:bg-red-50"
+                      className="text-xs px-2 py-1 rounded text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                     >
                       Remove
                     </button>
@@ -459,15 +459,15 @@ function TeamDetail({
         </section>
 
         {isOrgAdmin && candidates.length > 0 && (
-          <section className="bg-white border border-neutral-200 rounded-md p-5 space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-700">
+          <section className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-md p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
               Add member
             </h2>
             <form onSubmit={add} className="flex flex-wrap items-center gap-2">
               <select
                 value={addAccountId}
                 onChange={(e) => setAddAccountId(e.target.value)}
-                className="text-sm border border-neutral-300 rounded px-2 py-1 flex-1 min-w-[200px]"
+                className="text-sm border border-neutral-300 dark:border-neutral-700 rounded px-2 py-1 flex-1 min-w-[200px]"
               >
                 <option value="">Select an org member…</option>
                 {candidates.map((m) => (
@@ -481,7 +481,7 @@ function TeamDetail({
                 onChange={(e) =>
                   setAddRole(e.target.value as "manager" | "member")
                 }
-                className="text-sm border border-neutral-300 rounded px-2 py-1"
+                className="text-sm border border-neutral-300 dark:border-neutral-700 rounded px-2 py-1"
               >
                 <option value="member">member</option>
                 <option value="manager">manager</option>

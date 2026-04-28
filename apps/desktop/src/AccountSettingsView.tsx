@@ -32,10 +32,10 @@ export function AccountSettingsView({ workspaceId }: { workspaceId: string }) {
     <div className="p-6 max-w-xl space-y-6">
       <h2 className="text-lg font-semibold">Account</h2>
       {loadError && (
-        <div className="text-sm text-red-600">{loadError}</div>
+        <div className="text-sm text-red-600 dark:text-red-400">{loadError}</div>
       )}
       {!account && !loadError && (
-        <div className="text-sm text-neutral-500">Loading…</div>
+        <div className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</div>
       )}
       {account && (
         <>
@@ -44,7 +44,7 @@ export function AccountSettingsView({ workspaceId }: { workspaceId: string }) {
             account={account}
             onUpdated={setAccount}
           />
-          <hr className="border-neutral-200" />
+          <hr className="border-neutral-200 dark:border-neutral-800" />
           <ChangePasswordForm workspaceId={workspaceId} />
         </>
       )}
@@ -97,15 +97,15 @@ function DisplayNameForm({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full border border-neutral-300 rounded px-3 py-2 text-sm"
+          className="w-full border border-neutral-300 dark:border-neutral-700 rounded px-3 py-2 text-sm"
           disabled={busy}
         />
-        <p className="text-xs text-neutral-500 mt-1">
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
           Shown to teammates on shared docs, comments, and audit entries.
         </p>
       </div>
       {error && (
-        <div className="text-sm text-red-600" role="alert">
+        <div className="text-sm text-red-600 dark:text-red-400" role="alert">
           {error}
         </div>
       )}
@@ -118,7 +118,7 @@ function DisplayNameForm({
           {busy ? "Saving…" : "Save"}
         </button>
         {savedAt && !dirty && (
-          <span className="text-xs text-neutral-500">Saved.</span>
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">Saved.</span>
         )}
       </div>
     </form>
@@ -165,7 +165,7 @@ function ChangePasswordForm({ workspaceId }: { workspaceId: string }) {
           required
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
-          className="w-full border border-neutral-300 rounded px-3 py-2 text-sm"
+          className="w-full border border-neutral-300 dark:border-neutral-700 rounded px-3 py-2 text-sm"
           disabled={busy}
         />
       </div>
@@ -178,7 +178,7 @@ function ChangePasswordForm({ workspaceId }: { workspaceId: string }) {
           minLength={8}
           value={next}
           onChange={(e) => setNext(e.target.value)}
-          className="w-full border border-neutral-300 rounded px-3 py-2 text-sm"
+          className="w-full border border-neutral-300 dark:border-neutral-700 rounded px-3 py-2 text-sm"
           disabled={busy}
         />
       </div>
@@ -191,12 +191,12 @@ function ChangePasswordForm({ workspaceId }: { workspaceId: string }) {
           minLength={8}
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full border border-neutral-300 rounded px-3 py-2 text-sm"
+          className="w-full border border-neutral-300 dark:border-neutral-700 rounded px-3 py-2 text-sm"
           disabled={busy}
         />
       </div>
       {error && (
-        <div className="text-sm text-red-600" role="alert">
+        <div className="text-sm text-red-600 dark:text-red-400" role="alert">
           {error}
         </div>
       )}
@@ -209,7 +209,7 @@ function ChangePasswordForm({ workspaceId }: { workspaceId: string }) {
           {busy ? "Updating…" : "Change password"}
         </button>
         {savedAt && (
-          <span className="text-xs text-neutral-500">Password updated.</span>
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">Password updated.</span>
         )}
       </div>
     </form>

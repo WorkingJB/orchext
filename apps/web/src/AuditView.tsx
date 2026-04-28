@@ -30,7 +30,7 @@ export function AuditView({ tenant }: { tenant: Membership }) {
         <div className="flex items-center gap-3">
           {page && page.head_hash && (
             <span
-              className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-100 text-neutral-600"
+              className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
               title="Current chain head hash"
             >
               head {page.head_hash.slice(0, 12)}…
@@ -38,7 +38,7 @@ export function AuditView({ tenant }: { tenant: Membership }) {
           )}
           <button
             onClick={refresh}
-            className="text-xs text-neutral-500 hover:text-neutral-900"
+            className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
           >
             Refresh
           </button>
@@ -46,14 +46,14 @@ export function AuditView({ tenant }: { tenant: Membership }) {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">
           {error}
         </div>
       )}
 
-      <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-600 text-left text-xs uppercase tracking-wider">
+          <thead className="bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 text-left text-xs uppercase tracking-wider">
             <tr>
               <th className="px-3 py-2 w-14">Seq</th>
               <th className="px-3 py-2 w-40">When</th>
@@ -67,24 +67,24 @@ export function AuditView({ tenant }: { tenant: Membership }) {
           <tbody>
             {page && page.entries.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-neutral-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-neutral-500 dark:text-neutral-400">
                   No audit entries yet. Actions by any MCP client will land here.
                 </td>
               </tr>
             )}
             {page?.entries.map((r) => (
-              <tr key={r.seq} className="border-t border-neutral-100">
-                <td className="px-3 py-2 text-neutral-500 font-mono text-xs">
+              <tr key={r.seq} className="border-t border-neutral-100 dark:border-neutral-800">
+                <td className="px-3 py-2 text-neutral-500 dark:text-neutral-400 font-mono text-xs">
                   {r.seq}
                 </td>
-                <td className="px-3 py-2 text-neutral-600 text-xs">
+                <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400 text-xs">
                   {new Date(r.ts).toLocaleString()}
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-neutral-700">
+                <td className="px-3 py-2 font-mono text-xs text-neutral-700 dark:text-neutral-300">
                   {r.actor}
                 </td>
                 <td className="px-3 py-2">{r.action}</td>
-                <td className="px-3 py-2 font-mono text-xs text-neutral-600">
+                <td className="px-3 py-2 font-mono text-xs text-neutral-600 dark:text-neutral-400">
                   {r.document_id ?? "—"}
                 </td>
                 <td className="px-3 py-2">
@@ -92,7 +92,7 @@ export function AuditView({ tenant }: { tenant: Membership }) {
                     {r.scope_used.map((s) => (
                       <span
                         key={s}
-                        className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-700"
+                        className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
                       >
                         {s}
                       </span>
@@ -104,10 +104,10 @@ export function AuditView({ tenant }: { tenant: Membership }) {
                     className={
                       "text-xs px-1.5 py-0.5 rounded " +
                       (r.outcome === "ok"
-                        ? "bg-green-100 text-green-700"
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                         : r.outcome === "denied"
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-red-100 text-red-700")
+                        ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400")
                     }
                   >
                     {r.outcome}

@@ -117,7 +117,7 @@ export function OrgRail({
   return (
     <nav
       aria-label="Workspace picker"
-      className="w-14 shrink-0 border-r border-neutral-200 bg-white flex flex-col items-center gap-2 py-3"
+      className="w-14 shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col items-center gap-2 py-3"
     >
       {contexts.map((ctx) => (
         <ContextBadge
@@ -132,7 +132,7 @@ export function OrgRail({
         onClick={onAdd}
         title="Add workspace"
         aria-label="Add workspace"
-        className="w-9 h-9 rounded-lg flex items-center justify-center text-lg font-light text-neutral-500 border border-dashed border-neutral-300 hover:border-neutral-500 hover:text-neutral-900 transition mt-1"
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-lg font-light text-neutral-500 dark:text-neutral-400 border border-dashed border-neutral-300 dark:border-neutral-700 hover:border-neutral-500 dark:hover:border-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 transition mt-1"
       >
         +
       </button>
@@ -162,7 +162,7 @@ function ContextBadge({
         "w-9 h-9 rounded-lg flex items-center justify-center text-xs font-semibold transition " +
         (active
           ? "bg-brand-500 text-white ring-2 ring-offset-1 ring-brand-300"
-          : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200")
+          : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700")
       }
     >
       {ctx.kind === "org" && ctx.logoData ? (

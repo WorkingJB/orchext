@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-}
-
 html,
 body,
 #root {
@@ -13,7 +9,7 @@ body,
 }
 
 body {
-  @apply bg-neutral-50 text-neutral-900 antialiased;
+  @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
 }
 
 button {
@@ -23,5 +19,5 @@ button {
 textarea,
 input,
 select {
-  @apply bg-white;
+  @apply bg-white dark:bg-neutral-900 dark:text-neutral-100;
 }

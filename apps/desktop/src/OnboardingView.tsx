@@ -102,19 +102,19 @@ export function OnboardingView({
   }
 
   return (
-    <div className="h-full flex flex-col bg-white">
-      <header className="px-6 h-12 flex items-center justify-between border-b border-neutral-200">
-        <div className="text-sm font-semibold text-neutral-900">Onboarding</div>
+    <div className="h-full flex flex-col bg-white dark:bg-neutral-900">
+      <header className="px-6 h-12 flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800">
+        <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Onboarding</div>
         <button
           onClick={onComplete}
-          className="text-xs text-neutral-500 hover:text-neutral-900"
+          className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
         >
           Skip for now
         </button>
       </header>
 
       {err && (
-        <div className="m-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+        <div className="m-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-800">
           {err}
         </div>
       )}
@@ -124,7 +124,7 @@ export function OnboardingView({
           <h2 className="text-lg font-semibold mb-2">
             Anthropic API key
           </h2>
-          <p className="text-sm text-neutral-600 mb-4">
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
             Onboarding uses Claude Haiku 4.5 to draft your initial context
             documents. Paste your Anthropic API key to continue. The key is
             stored in <code>.orchext/settings.json</code> in this vault.
@@ -134,12 +134,12 @@ export function OnboardingView({
             value={apiKeyDraft}
             onChange={(e) => setApiKeyDraft(e.target.value)}
             placeholder="sk-ant-..."
-            className="w-full px-3 py-2 border border-neutral-300 rounded text-sm font-mono"
+            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded text-sm font-mono"
           />
           <div className="mt-4 flex justify-end gap-2">
             <button
               onClick={onComplete}
-              className="px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 rounded"
+              className="px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
             >
               Skip
             </button>
@@ -158,15 +158,15 @@ export function OnboardingView({
         <>
           <div
             ref={chatRef}
-            className="flex-1 overflow-y-auto px-6 py-4 bg-neutral-50"
+            className="flex-1 overflow-y-auto px-6 py-4 bg-neutral-50 dark:bg-neutral-900"
           >
             {history.length === 0 && (
-              <div className="max-w-2xl mx-auto text-sm text-neutral-600 mb-4">
+              <div className="max-w-2xl mx-auto text-sm text-neutral-600 dark:text-neutral-400 mb-4">
                 <p className="mb-2">
                   Hi — I'll ask a few questions to seed your vault. Type
                   anything to start.
                 </p>
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
                   Good first message: "I'm a staff engineer at a fintech
                   startup working on payments infra."
                 </p>
@@ -179,7 +179,7 @@ export function OnboardingView({
               {busy && <Bubble role="assistant" content="…" />}
             </div>
           </div>
-          <div className="border-t border-neutral-200 p-4">
+          <div className="border-t border-neutral-200 dark:border-neutral-800 p-4">
             <div className="max-w-2xl mx-auto flex gap-2">
               <textarea
                 value={pending}
@@ -192,7 +192,7 @@ export function OnboardingView({
                 }}
                 rows={2}
                 placeholder="Type a reply… (Enter to send)"
-                className="flex-1 px-3 py-2 border border-neutral-300 rounded text-sm resize-none"
+                className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded text-sm resize-none"
               />
               <div className="flex flex-col gap-2">
                 <button
@@ -206,7 +206,7 @@ export function OnboardingView({
                   onClick={finalize}
                   disabled={busy || history.length < 2}
                   title="Draft seed documents from this conversation"
-                  className="px-3 py-1.5 text-sm border border-brand-600 text-brand-700 rounded hover:bg-brand-50 disabled:opacity-50"
+                  className="px-3 py-1.5 text-sm border border-brand-600 text-brand-700 dark:text-brand-500 rounded hover:bg-brand-50 dark:hover:bg-brand-700/20 disabled:opacity-50"
                 >
                   Finish
                 </button>
@@ -217,12 +217,12 @@ export function OnboardingView({
       )}
 
       {step === "review" && (
-        <div className="flex-1 overflow-y-auto p-6 bg-neutral-50">
+        <div className="flex-1 overflow-y-auto p-6 bg-neutral-50 dark:bg-neutral-900">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-lg font-semibold mb-2">
               Review seed documents ({drafts.length})
             </h2>
-            <p className="text-sm text-neutral-600 mb-4">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
               These will be written to your vault. You can edit or delete
               any of them afterwards in the Documents tab.
             </p>
@@ -230,26 +230,26 @@ export function OnboardingView({
               {drafts.map((d, i) => (
                 <div
                   key={i}
-                  className="bg-white border border-neutral-200 rounded p-3 text-sm"
+                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded p-3 text-sm"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-xs text-neutral-700">
+                    <span className="font-mono text-xs text-neutral-700 dark:text-neutral-300">
                       {d.id}
                     </span>
-                    <span className="text-xs text-neutral-500">{d.type}</span>
-                    <span className="text-xs text-neutral-500">
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">{d.type}</span>
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
                       {d.visibility}
                     </span>
                     <button
                       onClick={() =>
                         setDrafts(drafts.filter((_, j) => j !== i))
                       }
-                      className="ml-auto text-xs text-red-600 hover:underline"
+                      className="ml-auto text-xs text-red-600 dark:text-red-400 hover:underline"
                     >
                       Remove
                     </button>
                   </div>
-                  <pre className="text-xs text-neutral-700 whitespace-pre-wrap font-mono">
+                  <pre className="text-xs text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap font-mono">
                     {d.body}
                   </pre>
                 </div>
@@ -258,7 +258,7 @@ export function OnboardingView({
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setStep("chat")}
-                className="px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 rounded"
+                className="px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
               >
                 Back to chat
               </button>
@@ -278,7 +278,7 @@ export function OnboardingView({
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-md text-center">
             <div className="text-2xl mb-2">All set</div>
-            <p className="text-sm text-neutral-600 mb-6">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-6">
               Saved {saved} document{saved === 1 ? "" : "s"} to your vault.
               Open the Documents tab to review or edit them.
             </p>
@@ -304,7 +304,7 @@ function Bubble({ role, content }: { role: string; content: string }) {
           "max-w-[85%] px-3 py-2 rounded-lg text-sm whitespace-pre-wrap " +
           (isUser
             ? "bg-brand-600 text-white"
-            : "bg-white text-neutral-900 border border-neutral-200")
+            : "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-800")
         }
       >
         {content}

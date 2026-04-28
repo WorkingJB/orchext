@@ -35,7 +35,7 @@ export function RichTextEditor({
         autolink: true,
         protocols: ["http", "https", "mailto"],
         HTMLAttributes: {
-          class: "underline text-brand-700",
+          class: "underline text-brand-700 dark:text-brand-500",
           rel: "noopener noreferrer",
         },
       }),
@@ -58,9 +58,9 @@ export function RichTextEditor({
           "[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-3 " +
           "[&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-3 " +
           "[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 " +
-          "[&_code]:bg-neutral-100 [&_code]:px-1 [&_code]:rounded " +
-          "[&_blockquote]:border-l-2 [&_blockquote]:border-neutral-300 " +
-          "[&_blockquote]:pl-3 [&_blockquote]:text-neutral-600",
+          "[&_code]:bg-neutral-100 dark:[&_code]:bg-neutral-800 [&_code]:px-1 [&_code]:rounded " +
+          "[&_blockquote]:border-l-2 [&_blockquote]:border-neutral-300 dark:[&_blockquote]:border-neutral-700 " +
+          "[&_blockquote]:pl-3 [&_blockquote]:text-neutral-600 dark:[&_blockquote]:text-neutral-400",
       },
     },
   });
@@ -77,7 +77,7 @@ export function RichTextEditor({
   }, [editor, value]);
 
   return (
-    <div className="border border-neutral-300 rounded">
+    <div className="border border-neutral-300 dark:border-neutral-700 rounded">
       <Toolbar editor={editor} advanced={advanced} onToggleAdvanced={() => setAdvanced((v) => !v)} />
       {advanced ? (
         <textarea
@@ -112,7 +112,7 @@ function Toolbar({
   );
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1 border-b border-neutral-200 bg-neutral-50 text-sm">
+    <div className="flex items-center gap-1 px-2 py-1 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 text-sm">
       <ToolbarBtn
         label="B"
         title="Bold (⌘B)"
@@ -201,8 +201,8 @@ function Toolbar({
           className={
             "text-xs px-2 py-1 rounded transition " +
             (advanced
-              ? "bg-brand-100 text-brand-700 font-medium"
-              : "text-neutral-500 hover:bg-neutral-100")
+              ? "bg-brand-100 dark:bg-brand-700/20 text-brand-700 dark:text-brand-500 font-medium"
+              : "text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800")
           }
         >
           {advanced ? "Rich" : "Advanced"}
@@ -213,7 +213,7 @@ function Toolbar({
 }
 
 function Sep() {
-  return <div className="w-px h-5 bg-neutral-200 mx-1" />;
+  return <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700 mx-1" />;
 }
 
 function ToolbarBtn({
@@ -246,8 +246,8 @@ function ToolbarBtn({
       className={[
         "min-w-[1.75rem] h-7 px-1.5 rounded text-xs transition",
         active
-          ? "bg-brand-100 text-brand-700"
-          : "text-neutral-700 hover:bg-neutral-100",
+          ? "bg-brand-100 dark:bg-brand-700/20 text-brand-700 dark:text-brand-500"
+          : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800",
         disabled ? "opacity-50 cursor-not-allowed" : "",
         className ?? "",
       ].join(" ")}

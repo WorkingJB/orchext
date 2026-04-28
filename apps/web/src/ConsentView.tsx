@@ -85,7 +85,7 @@ export function ConsentView() {
 
   if (auth.kind === "bootstrapping") {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
+      <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
         Loading…
       </div>
     );
@@ -129,7 +129,7 @@ function AuthorizedConsent({ profile }: { profile: SessionProfile }) {
   }
   if (memberships === null) {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
+      <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
         Loading…
       </div>
     );
@@ -196,13 +196,13 @@ function AuthorizedConsent({ profile }: { profile: SessionProfile }) {
   const hasPrivate = req.scope.includes("private");
 
   return (
-    <div className="h-full flex items-center justify-center p-6 bg-neutral-50">
-      <div className="w-full max-w-lg bg-white border border-neutral-200 rounded-lg shadow-sm p-6">
+    <div className="h-full flex items-center justify-center p-6 bg-neutral-50 dark:bg-neutral-900">
+      <div className="w-full max-w-lg bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-xl font-semibold">Authorize agent</h1>
-          <span className="text-xs text-neutral-500">{profile.email}</span>
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">{profile.email}</span>
         </div>
-        <p className="text-sm text-neutral-600 mb-5">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-5">
           An agent is requesting a token to act on your behalf in this
           workspace. Review the request before approving.
         </p>
@@ -213,7 +213,7 @@ function AuthorizedConsent({ profile }: { profile: SessionProfile }) {
 
         <Field label="Workspace">
           <div className="font-medium">{tenant.name}</div>
-          <div className="text-xs text-neutral-500 font-mono">
+          <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
             {tenant.tenant_id}
           </div>
         </Field>
@@ -226,21 +226,21 @@ function AuthorizedConsent({ profile }: { profile: SessionProfile }) {
                 className={
                   "inline-block px-1.5 py-0.5 rounded text-xs " +
                   (s === "private"
-                    ? "bg-red-100 text-red-700"
-                    : "bg-neutral-100 text-neutral-700")
+                    ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                    : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300")
                 }
               >
                 {s}
               </span>
             ))}
-            <span className="ml-2 text-xs text-neutral-500">
+            <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
               · {req.mode === "read_propose" ? "read + propose" : "read-only"}
             </span>
           </div>
         </Field>
 
         <Field label="Token validity">
-          <div className="text-sm text-neutral-700">
+          <div className="text-sm text-neutral-700 dark:text-neutral-300">
             {req.ttlDays === null
               ? "default (90 days)"
               : `${req.ttlDays} day${req.ttlDays === 1 ? "" : "s"}`}
@@ -248,13 +248,13 @@ function AuthorizedConsent({ profile }: { profile: SessionProfile }) {
         </Field>
 
         <Field label="Returns to">
-          <code className="text-xs text-neutral-700 break-all">
+          <code className="text-xs text-neutral-700 dark:text-neutral-300 break-all">
             {req.redirectUri}
           </code>
         </Field>
 
         {hasPrivate && (
-          <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded border border-red-200 dark:border-red-800">
             This token will be able to read documents marked{" "}
             <span className="font-mono">private</span>. Only approve if you
             recognise the agent above and trust it with your most sensitive
@@ -263,7 +263,7 @@ function AuthorizedConsent({ profile }: { profile: SessionProfile }) {
         )}
 
         {submitErr && (
-          <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm rounded border border-red-200 dark:border-red-800">
             {submitErr}
           </div>
         )}
@@ -272,7 +272,7 @@ function AuthorizedConsent({ profile }: { profile: SessionProfile }) {
           <button
             onClick={deny}
             disabled={submitting}
-            className="px-3 py-1.5 text-sm border border-neutral-300 rounded hover:bg-neutral-50 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm border border-neutral-300 dark:border-neutral-700 rounded hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50"
           >
             Deny
           </button>
@@ -298,7 +298,7 @@ function Field({
 }) {
   return (
     <div className="mb-3">
-      <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1">
+      <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
         {label}
       </div>
       {children}
@@ -308,10 +308,10 @@ function Field({
 
 function FatalCard({ title, body }: { title: string; body: string }) {
   return (
-    <div className="h-full flex items-center justify-center p-6 bg-neutral-50">
-      <div className="w-full max-w-lg bg-white border border-red-200 rounded-lg shadow-sm p-6">
-        <h1 className="text-lg font-semibold text-red-700 mb-2">{title}</h1>
-        <p className="text-sm text-neutral-700">{body}</p>
+    <div className="h-full flex items-center justify-center p-6 bg-neutral-50 dark:bg-neutral-900">
+      <div className="w-full max-w-lg bg-white dark:bg-neutral-900 border border-red-200 dark:border-red-800 rounded-lg shadow-sm p-6">
+        <h1 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-2">{title}</h1>
+        <p className="text-sm text-neutral-700 dark:text-neutral-300">{body}</p>
       </div>
     </div>
   );

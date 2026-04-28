@@ -49,10 +49,10 @@ export function LoginView({
     <div className="h-full flex items-center justify-center p-6">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm bg-white border border-neutral-200 rounded-lg p-6 shadow-sm"
+        className="w-full max-w-sm bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-6 shadow-sm"
       >
         <h1 className="text-xl font-semibold mb-1">Orchext</h1>
-        <p className="text-sm text-neutral-500 mb-5">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-5">
           {mode === "login" ? "Sign in to your workspace." : "Create an account."}
         </p>
 
@@ -63,7 +63,7 @@ export function LoginView({
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full border border-neutral-300 rounded-md px-3 py-2 mb-3 text-sm"
+          className="w-full border border-neutral-300 dark:border-neutral-700 rounded-md px-3 py-2 mb-3 text-sm"
         />
 
         <label className="block text-sm mb-1">Password</label>
@@ -74,7 +74,7 @@ export function LoginView({
           minLength={mode === "signup" ? 8 : undefined}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full border border-neutral-300 rounded-md px-3 py-2 mb-3 text-sm"
+          className="w-full border border-neutral-300 dark:border-neutral-700 rounded-md px-3 py-2 mb-3 text-sm"
         />
 
         {mode === "signup" && (
@@ -87,23 +87,23 @@ export function LoginView({
               minLength={8}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full border border-neutral-300 rounded-md px-3 py-2 mb-3 text-sm"
+              className="w-full border border-neutral-300 dark:border-neutral-700 rounded-md px-3 py-2 mb-3 text-sm"
             />
 
             <label className="block text-sm mb-1">
-              Display name <span className="text-neutral-400">(optional)</span>
+              Display name <span className="text-neutral-400 dark:text-neutral-500">(optional)</span>
             </label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full border border-neutral-300 rounded-md px-3 py-2 mb-3 text-sm"
+              className="w-full border border-neutral-300 dark:border-neutral-700 rounded-md px-3 py-2 mb-3 text-sm"
             />
           </>
         )}
 
         {error && (
-          <div className="text-sm text-red-600 mb-3" role="alert">
+          <div className="text-sm text-red-600 dark:text-red-400 mb-3" role="alert">
             {error}
           </div>
         )}
@@ -126,7 +126,7 @@ export function LoginView({
             setMode(mode === "login" ? "signup" : "login");
             setError(null);
           }}
-          className="w-full text-sm text-neutral-600 hover:text-neutral-900 mt-3"
+          className="w-full text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 mt-3"
         >
           {mode === "login"
             ? "Need an account? Sign up"

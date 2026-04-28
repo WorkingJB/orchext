@@ -247,7 +247,7 @@ function MainApp() {
 
   if (auth.kind === "bootstrapping") {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
+      <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
         Loading…
       </div>
     );
@@ -263,7 +263,7 @@ function MainApp() {
   }
   if (contexts.kind === "loading") {
     return (
-      <div className="h-full flex items-center justify-center text-neutral-500">
+      <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
         Loading workspaces…
       </div>
     );
@@ -287,11 +287,11 @@ function MainApp() {
     // server that has no first-user yet, or an admin-removed account
     // with no re-application — log out so the user can re-sign-up.
     return (
-      <div className="h-full flex flex-col items-center justify-center text-neutral-500 gap-3">
+      <div className="h-full flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-400 gap-3">
         <span>No workspaces available.</span>
         <button
           onClick={logout}
-          className="text-sm text-neutral-500 hover:text-neutral-900 underline"
+          className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 underline"
         >
           Sign out
         </button>
@@ -301,17 +301,17 @@ function MainApp() {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="border-b border-neutral-200 bg-white px-4 h-12 flex items-center gap-3">
+      <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 h-12 flex items-center gap-3">
         <span className="font-semibold">Orchext</span>
-        <span className="text-neutral-400">·</span>
-        <span className="text-sm text-neutral-700">
+        <span className="text-neutral-400 dark:text-neutral-500">·</span>
+        <span className="text-sm text-neutral-700 dark:text-neutral-300">
           {active.kind === "personal" ? "Personal" : active.name}
         </span>
-        <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600">
+        <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600 dark:text-neutral-400">
           <span>{auth.profile.displayName}</span>
           <button
             onClick={logout}
-            className="text-neutral-500 hover:text-neutral-900"
+            className="text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
           >
             Sign out
           </button>
@@ -325,7 +325,7 @@ function MainApp() {
           onCreateOrg={createNewOrg}
         />
         {workspace.kind === "ready" && (
-          <nav className="w-44 border-r border-neutral-200 bg-white p-2 flex flex-col gap-1">
+          <nav className="w-44 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-2 flex flex-col gap-1">
             <NavBtn
               label="Documents"
               active={view === "documents"}
@@ -338,9 +338,9 @@ function MainApp() {
             />
           </nav>
         )}
-        <main className="flex-1 min-w-0 bg-neutral-50">
+        <main className="flex-1 min-w-0 bg-neutral-50 dark:bg-neutral-900">
           {workspace.kind === "checking" && (
-            <div className="h-full flex items-center justify-center text-neutral-500">
+            <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
               Checking workspace…
             </div>
           )}
@@ -431,8 +431,8 @@ function NavBtn({
       className={
         "text-left px-3 py-2 rounded-md text-sm transition " +
         (active
-          ? "bg-brand-50 text-brand-700 font-medium"
-          : "text-neutral-700 hover:bg-neutral-100")
+          ? "bg-brand-50 dark:bg-brand-700/20 text-brand-700 dark:text-brand-500 font-medium"
+          : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800")
       }
     >
       {label}

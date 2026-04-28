@@ -21,10 +21,10 @@ export function AwaitingApprovalView({
 }) {
   const single = pending.length === 1 ? pending[0] : null;
   return (
-    <div className="h-full flex flex-col items-center justify-center bg-neutral-50 px-6">
-      <div className="max-w-md w-full bg-white border border-neutral-200 rounded-lg p-6 shadow-sm">
+    <div className="h-full flex flex-col items-center justify-center bg-neutral-50 dark:bg-neutral-900 px-6">
+      <div className="max-w-md w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-6 shadow-sm">
         <h2 className="text-lg font-semibold mb-2">Awaiting approval</h2>
-        <p className="text-sm text-neutral-600 mb-4">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
           {single ? (
             <>
               Your request to join <strong>{single.org_name}</strong> is
@@ -39,23 +39,23 @@ export function AwaitingApprovalView({
           )}
         </p>
         {!single && (
-          <ul className="text-sm text-neutral-700 space-y-1 mb-4">
+          <ul className="text-sm text-neutral-700 dark:text-neutral-300 space-y-1 mb-4">
             {pending.map((p) => (
               <li key={p.id}>
                 • <strong>{p.org_name}</strong>{" "}
-                <span className="text-xs text-neutral-500">
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   · requested {new Date(p.requested_at).toLocaleDateString()}
                 </span>
               </li>
             ))}
           </ul>
         )}
-        <p className="text-xs text-neutral-500 mb-4">
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
           Signed in as {email}.
         </p>
         <button
           onClick={onSignOut}
-          className="text-sm text-neutral-500 hover:text-neutral-900"
+          className="text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
         >
           Sign out
         </button>
