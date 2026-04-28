@@ -17,7 +17,7 @@ export function AccountSettingsView({
   onProfileUpdated: (profile: SessionProfile) => void;
 }) {
   return (
-    <div className="p-6 max-w-xl space-y-6">
+    <div className="p-3 sm:p-6 max-w-xl space-y-6">
       <h2 className="text-lg font-semibold">Account</h2>
       <DisplayNameForm
         profile={profile}

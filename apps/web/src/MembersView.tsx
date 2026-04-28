@@ -141,9 +141,9 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
   const callerIsOwner = ctx.role === "owner";
 
   return (
-    <div className="h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-3 sm:p-6">
       <div className="max-w-4xl mx-auto space-y-8">
-        <header className="flex items-center justify-between">
+        <header className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold">Members of {ctx.name}</h1>
           <div className="flex items-center gap-3">
             <button
@@ -171,7 +171,7 @@ export function MembersView({ ctx }: { ctx: Context & { kind: "org" } }) {
               email — no email is sent. Until they sign up, you can revoke
               the invitation below.
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="email"
                 value={inviteEmail}

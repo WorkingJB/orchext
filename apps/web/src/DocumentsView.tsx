@@ -181,13 +181,17 @@ export function DocumentsView({
   const defaultVisibilityForNew: string =
     isOrg && section === "org" ? "org" : "private";
 
+  const detailActive = !!selectedId || creating;
+
   return (
     <div className="flex h-full min-h-0">
       {/* Section sidebar — only in org workspace. Personal vault has
           one effective section, so no nav needed. Types moved to a
-          dropdown in the doc list header (one filter per layer). */}
+          dropdown in the doc list header (one filter per layer). On
+          mobile (`< md`) the sidebar is hidden in favor of a Section
+          select inside the list filters; see below. */}
       {isOrg && (
-        <aside className="w-44 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto">
+        <aside className="hidden md:block w-44 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto">
           <div className="p-2">
             <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1 px-1">
               Section
@@ -225,8 +229,14 @@ export function DocumentsView({
         </aside>
       )}
 
-      {/* Doc list */}
-      <section className="w-80 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto">
+      {/* Doc list — full-width on phone when no detail is open;
+          hidden on phone once a doc is selected (detail takes over). */}
+      <section
+        className={
+          "border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-y-auto md:w-80 md:shrink-0 md:block " +
+          (detailActive ? "hidden" : "block w-full")
+        }
+      >
         <div className="p-2 border-b border-neutral-200 dark:border-neutral-800 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm text-neutral-600 dark:text-neutral-400">
@@ -244,6 +254,28 @@ export function DocumentsView({
               + New
             </button>
           </div>
+          {isOrg && (
+            <select
+              value={section}
+              onChange={(e) => {
+                const next = e.target.value as Section;
+                setSection(next);
+                setTypeFilter(null);
+                if (next !== "all") setTeamFilter(null);
+              }}
+              className="md:hidden w-full px-2 py-1 border border-neutral-300 dark:border-neutral-700 rounded text-xs bg-white dark:bg-neutral-900"
+            >
+              <option value="all">All sections ({allItems.length})</option>
+              <option value="mine">
+                My context (
+                {allItems.filter((i) => i.visibility === "private").length})
+              </option>
+              <option value="org">
+                {tenant.name} (
+                {allItems.filter((i) => i.visibility === "org").length})
+              </option>
+            </select>
+          )}
           <select
             value={typeFilter ?? ""}
             onChange={(e) => setTypeFilter(e.target.value || null)}
@@ -315,8 +347,28 @@ export function DocumentsView({
         ))}
       </section>
 
-      {/* Detail */}
-      <section className="flex-1 min-w-0 overflow-y-auto">
+      {/* Detail — full-width on phone when active; hidden on phone
+          when no doc is selected (list takes over). */}
+      <section
+        className={
+          "flex-1 min-w-0 overflow-y-auto md:block " +
+          (detailActive ? "block" : "hidden md:block")
+        }
+      >
+        {(creating || selectedId) && (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedId(null);
+              setCreating(false);
+            }}
+            className="md:hidden flex items-center gap-1 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 w-full"
+            aria-label="Back to documents"
+          >
+            <span aria-hidden="true">‹</span>
+            <span>Back</span>
+          </button>
+        )}
         {creating && (
           <DocEditor
             key={`__new__:${typeFilter ?? ""}:${defaultVisibilityForNew}`}
@@ -677,9 +729,9 @@ function DocEditor({
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">
+    <div className="p-3 sm:p-6 max-w-3xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h2 className="text-lg font-semibold truncate min-w-0">
           {isNew ? "New document" : initial?.id}
         </h2>
         <div className="flex gap-2">

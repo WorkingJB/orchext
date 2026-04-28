@@ -117,7 +117,7 @@ export function OrgSettingsView({
   }
 
   return (
-    <div className="h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-3 sm:p-6">
       <div className="max-w-2xl mx-auto space-y-6">
         <header>
           <h1 className="text-xl font-semibold">Organization settings</h1>

@@ -24,8 +24,8 @@ export function AuditView({ tenant }: { tenant: Membership }) {
   }, [tenant.tenant_id]);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
+    <div className="p-3 sm:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h2 className="text-lg font-semibold">Audit log</h2>
         <div className="flex items-center gap-3">
           {page && page.head_hash && (
@@ -51,7 +51,61 @@ export function AuditView({ tenant }: { tenant: Membership }) {
         </div>
       )}
 
-      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden">
+      {/* Phone: card list. md+: table (below). */}
+      <div className="md:hidden space-y-2">
+        {page && page.entries.length === 0 && (
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-4 text-sm text-neutral-500 dark:text-neutral-400 text-center">
+            No audit entries yet. Actions by any MCP client will land here.
+          </div>
+        )}
+        {page?.entries.map((r) => (
+          <div
+            key={r.seq}
+            className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3 space-y-1.5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-sm font-medium truncate">{r.action}</div>
+              <span
+                className={
+                  "text-xs px-1.5 py-0.5 rounded shrink-0 " +
+                  (r.outcome === "ok"
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                    : r.outcome === "denied"
+                    ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400")
+                }
+              >
+                {r.outcome}
+              </span>
+            </div>
+            <div className="text-xs text-neutral-500 dark:text-neutral-400">
+              {new Date(r.ts).toLocaleString()} · #{r.seq}
+            </div>
+            <div className="text-xs text-neutral-700 dark:text-neutral-300 font-mono truncate">
+              {r.actor}
+            </div>
+            {r.document_id && (
+              <div className="text-xs text-neutral-600 dark:text-neutral-400 font-mono truncate">
+                {r.document_id}
+              </div>
+            )}
+            {r.scope_used.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-0.5">
+                {r.scope_used.map((s) => (
+                  <span
+                    key={s}
+                    className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 text-left text-xs uppercase tracking-wider">
             <tr>

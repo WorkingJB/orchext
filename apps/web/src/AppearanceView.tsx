@@ -11,7 +11,7 @@ export function AppearanceView() {
     { value: "system", label: "System" },
   ];
   return (
-    <div className="p-6 max-w-xl space-y-6">
+    <div className="p-3 sm:p-6 max-w-xl space-y-6">
       <h2 className="text-lg font-semibold">Appearance</h2>
       <section className="space-y-3">
         <h3 className="text-sm font-medium">Theme</h3>

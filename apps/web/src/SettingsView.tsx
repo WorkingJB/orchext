@@ -85,7 +85,7 @@ export function SettingsView({
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 flex items-center gap-1">
+      <div className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 sm:px-4 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
         {availableTabs.map((t) => (
           <SubTab
             key={t}

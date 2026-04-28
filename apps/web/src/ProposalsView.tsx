@@ -77,10 +77,10 @@ export function ProposalsView({
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
+    <div className="p-3 sm:p-6 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h2 className="text-lg font-semibold">Proposals</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <FilterTabs value={filter} onChange={setFilter} />
           <button
             onClick={() => void refresh()}

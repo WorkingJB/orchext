@@ -69,6 +69,11 @@ function MainApp() {
   /// so they land on that doc's pending proposals; cleared when the
   /// active context changes or they navigate elsewhere.
   const [proposalsFocus, setProposalsFocus] = useState<string | null>(null);
+  /// Mobile-only nav drawer. Below md: the OrgRail + Documents/Settings
+  /// nav are hidden behind a hamburger so the doc editor gets the full
+  /// width. Auto-closes on context/view change so a tap doesn't leave
+  /// the drawer covering the page.
+  const [navOpen, setNavOpen] = useState(false);
 
   // Probe the cookie-backed session on mount. 200 ⇒ authenticated;
   // anything else ⇒ no session, fall through to login.
@@ -299,16 +304,49 @@ function MainApp() {
     );
   }
 
+  function selectContextAndCloseDrawer(ctx: Context) {
+    selectContext(ctx);
+    setNavOpen(false);
+  }
+
+  function setViewAndCloseDrawer(v: View) {
+    setView(v);
+    setNavOpen(false);
+  }
+
   return (
     <div className="h-full flex flex-col">
-      <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 h-12 flex items-center gap-3">
+      <header className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3 sm:px-4 h-12 flex items-center gap-2 sm:gap-3">
+        <button
+          type="button"
+          onClick={() => setNavOpen((v) => !v)}
+          aria-label="Toggle navigation"
+          aria-expanded={navOpen}
+          className="md:hidden -ml-1 p-2 rounded text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+        </button>
         <span className="font-semibold">Orchext</span>
-        <span className="text-neutral-400 dark:text-neutral-500">·</span>
-        <span className="text-sm text-neutral-700 dark:text-neutral-300">
+        <span className="text-neutral-400 dark:text-neutral-500 hidden sm:inline">·</span>
+        <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate hidden sm:inline">
           {active.kind === "personal" ? "Personal" : active.name}
         </span>
         <div className="ml-auto flex items-center gap-3 text-sm text-neutral-600 dark:text-neutral-400">
-          <span>{auth.profile.displayName}</span>
+          <span className="hidden sm:inline">{auth.profile.displayName}</span>
           <button
             onClick={logout}
             className="text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
@@ -317,27 +355,44 @@ function MainApp() {
           </button>
         </div>
       </header>
-      <div className="flex flex-1 min-h-0">
-        <OrgRail
-          contexts={contexts.contexts}
-          activeTenantId={active.tenantId}
-          onSelect={selectContext}
-          onCreateOrg={createNewOrg}
-        />
-        {workspace.kind === "ready" && (
-          <nav className="w-44 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-2 flex flex-col gap-1">
-            <NavBtn
-              label="Documents"
-              active={view === "documents"}
-              onClick={() => setView("documents")}
-            />
-            <NavBtn
-              label="Settings"
-              active={view === "settings"}
-              onClick={() => setView("settings")}
-            />
-          </nav>
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Mobile drawer backdrop */}
+        {navOpen && (
+          <div
+            onClick={() => setNavOpen(false)}
+            className="md:hidden fixed inset-0 top-12 bg-black/40 z-30"
+            aria-hidden="true"
+          />
         )}
+        {/* Rail + nav: in-flow at md+, slide-out drawer below md */}
+        <div
+          className={
+            "flex md:static md:translate-x-0 md:transition-none " +
+            "fixed top-12 bottom-0 left-0 z-40 transition-transform " +
+            (navOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0")
+          }
+        >
+          <OrgRail
+            contexts={contexts.contexts}
+            activeTenantId={active.tenantId}
+            onSelect={selectContextAndCloseDrawer}
+            onCreateOrg={createNewOrg}
+          />
+          {workspace.kind === "ready" && (
+            <nav className="w-44 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-2 flex flex-col gap-1">
+              <NavBtn
+                label="Documents"
+                active={view === "documents"}
+                onClick={() => setViewAndCloseDrawer("documents")}
+              />
+              <NavBtn
+                label="Settings"
+                active={view === "settings"}
+                onClick={() => setViewAndCloseDrawer("settings")}
+              />
+            </nav>
+          )}
+        </div>
         <main className="flex-1 min-w-0 bg-neutral-50 dark:bg-neutral-900">
           {workspace.kind === "checking" && (
             <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">

@@ -90,9 +90,16 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
     );
   }
 
+  const detailActive = selected !== null;
+
   return (
     <div className="h-full flex min-h-0">
-      <aside className="w-64 shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col">
+      <aside
+        className={
+          "shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex-col md:flex md:w-64 " +
+          (detailActive ? "hidden" : "flex w-full")
+        }
+      >
         <header className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Teams</h2>
           {isOrgAdmin && (
@@ -176,7 +183,23 @@ export function TeamsView({ ctx }: { ctx: Context & { kind: "org" } }) {
           </div>
         )}
       </aside>
-      <div className="flex-1 min-w-0">
+      <div
+        className={
+          "flex-1 min-w-0 md:block " +
+          (detailActive ? "block" : "hidden md:block")
+        }
+      >
+        {selected && (
+          <button
+            type="button"
+            onClick={() => setSelected(null)}
+            className="md:hidden flex items-center gap-1 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 w-full"
+            aria-label="Back to teams"
+          >
+            <span aria-hidden="true">‹</span>
+            <span>Back</span>
+          </button>
+        )}
         {selected && teams ? (
           <TeamDetail
             ctx={ctx}
@@ -334,9 +357,9 @@ function TeamDetail({
     orgMembers?.filter((m) => !memberIds.has(m.account_id)) ?? [];
 
   return (
-    <div className="h-full overflow-auto p-6">
+    <div className="h-full overflow-auto p-3 sm:p-6">
       <div className="max-w-2xl mx-auto space-y-6">
-        <header className="flex items-baseline justify-between">
+        <header className="flex flex-wrap items-baseline justify-between gap-2">
           {renameOpen && canManage ? (
             <form onSubmit={rename} className="flex items-center gap-2 flex-1">
               <input
