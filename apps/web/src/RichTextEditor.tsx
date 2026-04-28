@@ -168,6 +168,36 @@ export function RichTextEditor({
   // dispatched programmatically (detail=0) or is a real mouse click.
   useEffect(() => {
     if (!debugEditor()) return;
+    // Monkey-patch HTMLElement.prototype.click and dispatchEvent so we
+    // can see who's invoking a synthetic click on the bold button.
+    const origClick = HTMLElement.prototype.click;
+    HTMLElement.prototype.click = function patchedClick(this: HTMLElement) {
+      // eslint-disable-next-line no-console
+      console.log("[RTE] HTMLElement.click() called on", {
+        tag: this.tagName,
+        text: this.textContent?.slice(0, 30),
+        stack: new Error("click-stack").stack,
+      });
+      return origClick.call(this);
+    };
+    const origDispatch = EventTarget.prototype.dispatchEvent;
+    EventTarget.prototype.dispatchEvent = function patchedDispatch(
+      this: EventTarget,
+      ev: Event
+    ) {
+      if (ev.type === "click" || ev.type === "dblclick") {
+        const t = this as HTMLElement;
+        // eslint-disable-next-line no-console
+        console.log("[RTE] dispatchEvent", {
+          eventType: ev.type,
+          targetTag: t.tagName,
+          targetText: t.textContent?.slice(0, 30),
+          isTrusted: ev.isTrusted,
+          stack: new Error("dispatch-stack").stack,
+        });
+      }
+      return origDispatch.call(this, ev);
+    };
     const onClick = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
       // eslint-disable-next-line no-console
@@ -206,6 +236,8 @@ export function RichTextEditor({
       document.removeEventListener("dblclick", onClick, true);
       document.removeEventListener("mousedown", onClick, true);
       document.removeEventListener("keydown", onKey, true);
+      HTMLElement.prototype.click = origClick;
+      EventTarget.prototype.dispatchEvent = origDispatch;
     };
   }, []);
 
