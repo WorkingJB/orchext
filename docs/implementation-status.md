@@ -300,11 +300,25 @@ phase docs themselves.
 
 ### In flight
 
+- **Next session:** [`phases/phase-3f-mcp-onboarding.md`](phases/phase-3f-mcp-onboarding.md) —
+  one-click "Connect to Claude" / "Connect to ChatGPT" flow that
+  produces every value the providers' add-connector forms need
+  (server URL, OAuth client id/secret) with copy buttons + deep
+  links + connection-confirmed polling. Adds OAuth metadata
+  endpoints (`.well-known/oauth-authorization-server` /
+  `oauth-protected-resource`), [RFC 7591] dynamic client
+  registration, and an SSE alias at `/v1/mcp/sse`. Driver: the
+  current Tokens UI is too plumbing-shaped for non-technical users
+  who just want their LLM to read their vault.
+
+[RFC 7591]: https://datatracker.ietf.org/doc/html/rfc7591
+
 - [`phases/phase-3-platform.md`](phases/phase-3-platform.md) —
   Orgs + teams + web onboarding chat + OS keychain. **Slices 1
   and 2 (Org foundation, Teams + logo upload) shipped
   2026-04-27** on web + desktop (see narratives above). **Slices
-  3-4 remain.**
+  3-4 remain** but are deprioritized behind 3f for the next
+  session; both are independent of MCP onboarding.
   *(Notion: [Slice 1 Org foundation — Done](https://www.notion.so/34b47fdae49a80a09100d7e9ec10afe8) ·
   [`org/` seed type — Done](https://www.notion.so/34b47fdae49a80f3aa60c780298ebe07) ·
   [Slice 2 Teams — Done](https://www.notion.so/34b47fdae49a8033bec2e5f0a2eeaf33) ·
