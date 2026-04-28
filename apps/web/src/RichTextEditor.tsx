@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { MouseEvent as ReactMouseEvent, useCallback, useEffect, useState } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -204,13 +204,23 @@ function Toolbar({
         title="Bold (⌘B)"
         active={editor?.isActive("bold") ?? false}
         disabled={advanced || !editor}
-        onClick={() => {
+        onClick={(e) => {
           if (debugEditor()) {
+            const target = e?.target as HTMLElement | null;
+            const current = e?.currentTarget as HTMLElement | null;
             // eslint-disable-next-line no-console
-            console.log(
-              "[RTE] TOOLBAR-BOLD onClick",
-              new Error("toolbar-bold-stack").stack
-            );
+            console.log("[RTE] TOOLBAR-BOLD onClick", {
+              isTrusted: e?.isTrusted,
+              type: e?.type,
+              detail: e?.detail,
+              clientX: e?.clientX,
+              clientY: e?.clientY,
+              targetTag: target?.tagName,
+              targetClass: target?.className,
+              targetText: target?.textContent?.slice(0, 30),
+              currentTag: current?.tagName,
+              currentClass: current?.className,
+            });
           }
           can((c) => c.toggleBold().run());
         }}
@@ -322,7 +332,7 @@ function ToolbarBtn({
   title: string;
   active: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  onClick: (e: ReactMouseEvent<HTMLButtonElement>) => void;
   className?: string;
 }) {
   return (
