@@ -5,8 +5,8 @@ projects, one per environment:
 
 | Project | Domain | Deploys from |
 |---|---|---|
-| `orchext-web-prod` | `app.orchext.ai` | `main` |
-| `orchext-web-test` | `test-app.orchext.ai` | `develop` (or `main` until a `develop` branch exists) |
+| `orchext-web-prod` | `app.orchext.ai` | `main` (promoted from `develop` by FF — see [`deploy/README.md`](../README.md)) |
+| `orchext-web-test` | `test-app.orchext.ai` | `develop` |
 
 Vercel itself is configured through its UI/API rather than a
 committed config file. There is no `fly.toml`-style equivalent worth

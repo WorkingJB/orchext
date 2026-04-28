@@ -91,7 +91,7 @@ environment, both deployed from the same Git repo.
 |---|---|---|
 | Domain | `app.orchext.ai` | `test-app.orchext.ai` |
 | Vercel project | `orchext-web-prod` | `orchext-web-test` |
-| Branch deployed | `main` | `develop` (or `main` until a develop branch exists) |
+| Branch deployed | `main` (promoted from `develop` by FF) | `develop` |
 | Build command | `npm run build` (in `apps/web`) | same |
 | Output dir | `apps/web/dist` | same |
 
@@ -413,9 +413,12 @@ the checklist exists so nothing is forgotten.
 - [ ] **Vercel auto-deploys** — production from `main`, test from
       `develop`. Configured in Vercel UI; no GH Actions needed.
       *(Done at first-deploy time; not a code-side artifact.)*
-- [ ] **Fly deploy on tag** — `fly-deploy.yml` triggered on
-      `release/*` tags. *(Deferred until release cadence justifies
-      automation; manual `flyctl deploy` is fine until then.)*
+- [x] **Fly auto-deploy** — `.github/workflows/fly-deploy.yml`
+      deploys the server to `orchext-test` on push to `develop` and
+      to `orchext-prod` on push to `main`, gated by a paths filter
+      (server-side crates, `Cargo.{toml,lock}`, `deploy/fly/**`).
+      Manual `flyctl deploy` still works for ad-hoc rollouts.
+      Requires `FLY_API_TOKEN` repo secret.
 
 ### 8.6 Deferred follow-ups
 

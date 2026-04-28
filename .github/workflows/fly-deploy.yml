@@ -1,0 +1,77 @@
+name: fly-deploy
+
+# Auto-deploys the Rust server to Fly when server-side code or deploy
+# config changes:
+#   - push to `develop` -> deploy to `orchext-test`
+#   - push to `main`    -> deploy to `orchext-prod`
+#
+# Vercel auto-deploys the frontend in parallel on the same push, so a
+# single commit that touches both crates and apps/web will roll out
+# backend (here) and frontend (Vercel) concurrently. The race window
+# (frontend live before backend) is small for typical Rust-build
+# durations vs Vite builds, but if a release ever needs strict
+# backend-first ordering, do the backend deploy manually first and
+# only then push the frontend change.
+#
+# Manual deploy is still available via `flyctl deploy` from a dev
+# machine — see deploy/README.md.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "deploy/fly/**"
+      - ".github/workflows/fly-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which environment to deploy to"
+        required: true
+        type: choice
+        options: [test, prod]
+
+concurrency:
+  # Serialize deploys per target environment so two pushes in quick
+  # succession don't race against each other on the Fly side.
+  group: fly-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy to fly
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target environment
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "env=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=test" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pick fly config
+        id: config
+        run: |
+          case "${{ steps.target.outputs.env }}" in
+            prod) echo "path=deploy/fly/orchext-prod.toml" >> "$GITHUB_OUTPUT" ;;
+            test) echo "path=deploy/fly/orchext-test.toml" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: flyctl deploy
+        # Build context is the repo root (`.`) because the Dockerfile
+        # at crates/orchext-server/Dockerfile expects to see the whole
+        # workspace.
+        run: flyctl deploy . --config ${{ steps.config.outputs.path }} --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

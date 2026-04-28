@@ -62,16 +62,51 @@ In order:
 
 ## Day-to-day deploys
 
-| What | How |
-|---|---|
-| Web app (prod) | Push to `main` — Vercel auto-deploys |
-| Web app (test) | Push to `develop` — Vercel auto-deploys |
-| Server (prod) | `flyctl deploy . --config deploy/fly/orchext-prod.toml` (run from repo root) |
-| Server (test) | `flyctl deploy . --config deploy/fly/orchext-test.toml` (run from repo root) |
+**Convention: test first, prod by promotion.** Work lands on
+`develop`, ships to `test-app.orchext.ai` automatically, gets
+verified, then is promoted to `main` (and to prod) by a fast-forward
+merge. Don't commit directly to `main`.
 
-CI workflows in `.github/workflows/` cover build + test gates. The
-deploy step is manual/CLI for now — automating Fly deploys via tag
-push is deferred until we have enough release cadence to justify it.
+### Web app
+
+1. Land work on `develop` (PR or direct commit).
+2. Vercel auto-deploys to `test-app.orchext.ai`. Smoke-test it.
+3. To ship to prod, fast-forward `main` from `develop` and push:
+   ```bash
+   git checkout main
+   git pull --ff-only
+   git merge --ff-only develop
+   git push origin main
+   ```
+   Vercel auto-deploys `app.orchext.ai`. The FF guarantees prod
+   never has commits that didn't go through test.
+
+### Server (Fly)
+
+Automated. `.github/workflows/fly-deploy.yml` deploys the server to
+Fly on push:
+
+| Branch pushed | Fly app deployed |
+|---|---|
+| `develop` | `orchext-test` |
+| `main` | `orchext-prod` |
+
+The workflow is gated by a paths filter — only changes to
+`crates/**`, `Cargo.{toml,lock}`, or `deploy/fly/**` trigger a build,
+so doc-only or web-only commits don't burn a Rust build.
+
+Requires the `FLY_API_TOKEN` repo secret (`flyctl auth token`).
+
+For ad-hoc rollouts (debugging, hotfix from a dev machine), manual
+deploy still works:
+
+```bash
+flyctl deploy . --config deploy/fly/orchext-test.toml   # test first
+flyctl deploy . --config deploy/fly/orchext-prod.toml   # then prod
+```
+
+Run from the repo root so the build context covers the whole
+workspace.
 
 ## Costs
 
