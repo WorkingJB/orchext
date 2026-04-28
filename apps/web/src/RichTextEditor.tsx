@@ -77,9 +77,23 @@ export function RichTextEditor({
         to: editor.state.selection.to,
         boldActive: editor.isActive("bold"),
         italicActive: editor.isActive("italic"),
-        // What the editor would emit *now* — compare to before/after
-        // double-click to see if the doc itself changed.
         markdown: (editor.storage as any).markdown?.getMarkdown?.() ?? "",
+      });
+    },
+    onTransaction: ({ transaction }) => {
+      if (!debugEditor()) return;
+      const steps = transaction.steps.map((s: any) => ({
+        type: s.constructor?.name,
+        // Most ProseMirror steps expose `.from`/`.to`/`.mark`. Stringify
+        // each step's JSON for full structural visibility on the AddMark
+        // step we suspect is firing.
+        json: typeof s.toJSON === "function" ? s.toJSON() : null,
+      }));
+      // eslint-disable-next-line no-console
+      console.log("[RTE] tx", {
+        docChanged: transaction.docChanged,
+        steps,
+        meta: (transaction as any).meta,
       });
     },
     editorProps: {
