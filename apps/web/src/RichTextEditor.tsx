@@ -204,7 +204,16 @@ function Toolbar({
         title="Bold (⌘B)"
         active={editor?.isActive("bold") ?? false}
         disabled={advanced || !editor}
-        onClick={() => can((c) => c.toggleBold().run())}
+        onClick={() => {
+          if (debugEditor()) {
+            // eslint-disable-next-line no-console
+            console.log(
+              "[RTE] TOOLBAR-BOLD onClick",
+              new Error("toolbar-bold-stack").stack
+            );
+          }
+          can((c) => c.toggleBold().run());
+        }}
         className="font-bold"
       />
       <ToolbarBtn
