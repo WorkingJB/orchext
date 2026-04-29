@@ -1,13 +1,17 @@
-//! MCP HTTP transport — JSON-RPC over POST.
+//! MCP HTTP transport — JSON-RPC over POST + streamable-HTTP GET.
 //!
-//! Single endpoint: `POST /v1/mcp`. Authenticated via
-//! `Authorization: Bearer ocx_*` against the `mcp_tokens` table — the
-//! same row the OAuth `/v1/oauth/token` flow issues. Per `MCP.md` §2.2
-//! the spec also defines a `GET /v1/mcp/events` SSE stream for
-//! `notifications/*`; we deliberately ship without it for v1 because
-//! every current MCP client (Claude Desktop, Cursor, etc.) uses stdio
-//! and the remote-MCP-client population that would actually exercise
-//! SSE is essentially zero today. Lands when there's a driver.
+//! Routes:
+//! - `POST /v1/mcp` (and `POST /v1/mcp/sse`) — JSON-RPC requests.
+//! - `GET /v1/mcp` (and `GET /v1/mcp/sse`) — `text/event-stream`
+//!   server channel. Skeleton only: authenticates the same Bearer
+//!   token the POST surface uses, then sits with periodic
+//!   `:keepalive` comments. `notifications/*` push fan-out lands in
+//!   3f.0b once a provider's MCP client actually consumes them.
+//!
+//! `…/sse` is a second mount of the same pair so ChatGPT's hard-coded
+//! `/sse` URL suffix works without a second transport. Authenticated
+//! via `Authorization: Bearer ocx_*` against the `mcp_tokens` table —
+//! the same row the OAuth `/v1/oauth/token` flow issues.
 //!
 //! The wire-format pieces (JSON-RPC envelope, error codes, tool
 //! definitions, URI parsing) are reused from `orchext-mcp` so the HTTP
@@ -43,10 +47,15 @@ use crate::{
 use axum::{
     extract::State,
     http::StatusCode,
-    response::IntoResponse,
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse,
+    },
     routing::post,
     Json, Router,
 };
+use std::{convert::Infallible, time::Duration};
+use tokio_stream::Stream;
 use chrono::{DateTime, NaiveDate, Utc};
 use orchext_mcp::{
     error::McpError,
@@ -123,7 +132,13 @@ struct McpToken {
 }
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/", post(mcp_handler))
+    // Both `/` and `/sse` mount the same handler pair. ChatGPT's
+    // *Add custom MCP server* form hard-codes the `/sse` suffix on
+    // server URLs, so the alias is what makes paste-and-go work
+    // there; Claude/Copilot are URL-shape permissive.
+    Router::new()
+        .route("/", post(mcp_handler).get(sse_handler))
+        .route("/sse", post(mcp_handler).get(sse_handler))
 }
 
 // ---------- entrypoint ----------
@@ -158,6 +173,26 @@ async fn mcp_handler(
         Err(e) => RpcResponse::err(id, mcp_error_to_rpc(&e)),
     };
     (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response()
+}
+
+/// SSE skeleton — provider connectors open this channel as part of
+/// their handshake. We don't yet emit `notifications/*` (3f.0b);
+/// keepalive comments are the only thing the client sees. The Bearer
+/// is resolved through the same path as the POST surface so revoked
+/// tokens 401 here too. Once the stream is open we don't re-resolve;
+/// the connection lives until the client disconnects or our keepalive
+/// write fails.
+async fn sse_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
+    resolve_token(&state, &headers).await?;
+    let stream = tokio_stream::pending::<Result<Event, Infallible>>();
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(25))
+            .text("keepalive"),
+    ))
 }
 
 async fn dispatch(

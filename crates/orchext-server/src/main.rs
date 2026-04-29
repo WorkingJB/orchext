@@ -55,7 +55,8 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState::new(db)
         .with_secure_cookies(config.secure_cookies)
-        .with_deployment_mode(config.deployment_mode);
+        .with_deployment_mode(config.deployment_mode)
+        .with_base_url(config.base_url.clone());
     let mut app = router(state);
     if let Some(cors) = orchext_server::cors_layer(&config.cors_allow_origins) {
         tracing::info!(

@@ -13,6 +13,7 @@ pub mod auth;
 pub mod config;
 pub mod cookies;
 pub mod crypto_api;
+pub mod discovery;
 pub mod documents;
 pub mod error;
 pub mod idx;
@@ -57,6 +58,9 @@ pub struct AppState {
     /// `self_hosted` (default) or `saas`. Drives the signup flow's
     /// org-assignment rule (see `accounts::signup`).
     pub deployment_mode: config::DeploymentMode,
+    /// See `Config::base_url`. `None` falls back to request-header
+    /// derivation in `discovery::issuer`.
+    pub base_url: Option<String>,
 }
 
 impl AppState {
@@ -73,6 +77,7 @@ impl AppState {
             secure_cookies: true,
             rate_limit_auth: true,
             deployment_mode: config::DeploymentMode::SelfHosted,
+            base_url: None,
         }
     }
 
@@ -88,6 +93,11 @@ impl AppState {
 
     pub fn with_deployment_mode(mut self, mode: config::DeploymentMode) -> Self {
         self.deployment_mode = mode;
+        self
+    }
+
+    pub fn with_base_url(mut self, base: Option<String>) -> Self {
+        self.base_url = base;
         self
     }
 }
@@ -146,6 +156,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
+        .merge(discovery::router())
         .nest("/v1/auth", auth::router(state.clone()))
         .nest("/v1/oauth", oauth_routes)
         .nest("/v1/mcp", mcp::router())

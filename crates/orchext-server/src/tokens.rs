@@ -49,6 +49,13 @@ struct PublicToken {
     expires_at: DateTime<Utc>,
     last_used_at: Option<DateTime<Utc>>,
     revoked_at: Option<DateTime<Utc>>,
+    /// `claude_connector` / `chatgpt_connector` / `copilot_connector` /
+    /// `dynamic_registration` / `manual` for tokens minted via the
+    /// OAuth client registry. `None` for tokens issued through the
+    /// admin or desktop paths. The web Tokens pane (3f.2) maps these
+    /// to friendly labels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    origin: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -83,11 +90,13 @@ async fn list_tokens(
 ) -> Result<Json<ListResponse>, ApiError> {
     let rows: Vec<PublicToken> = sqlx::query_as(
         r#"
-        SELECT id, label, scope, mode, max_docs, max_bytes,
-               created_at, expires_at, last_used_at, revoked_at
-        FROM mcp_tokens
-        WHERE tenant_id = $1
-        ORDER BY created_at DESC
+        SELECT t.id, t.label, t.scope, t.mode, t.max_docs, t.max_bytes,
+               t.created_at, t.expires_at, t.last_used_at, t.revoked_at,
+               c.origin
+        FROM mcp_tokens t
+        LEFT JOIN oauth_clients c ON c.client_id = t.oauth_client_id
+        WHERE t.tenant_id = $1
+        ORDER BY t.created_at DESC
         "#,
     )
     .bind(tc.tenant_id)
@@ -119,6 +128,8 @@ async fn issue_token(
             max_docs,
             max_bytes,
             ttl_days,
+            // Admin-issued tokens aren't tied to an OAuth client.
+            oauth_client_id: None,
         },
     )
     .await?;
@@ -144,6 +155,9 @@ pub(crate) struct OAuthIssueInput {
     pub max_docs: i32,
     pub max_bytes: i64,
     pub ttl_days: i64,
+    /// Backlink to an `oauth_clients` row when the code came from the
+    /// redirect flow. `None` for desktop POST-authorize codes.
+    pub oauth_client_id: Option<Uuid>,
 }
 
 pub(crate) struct OAuthIssued {
@@ -171,6 +185,7 @@ pub(crate) async fn issue_via_oauth(
             max_docs: input.max_docs,
             max_bytes: input.max_bytes,
             ttl_days: input.ttl_days,
+            oauth_client_id: input.oauth_client_id,
         },
     )
     .await?;
@@ -190,6 +205,7 @@ struct InsertTokenInput {
     max_docs: i32,
     max_bytes: i64,
     ttl_days: i64,
+    oauth_client_id: Option<Uuid>,
 }
 
 struct InsertedToken {
@@ -211,10 +227,15 @@ async fn insert_token(
         r#"
         INSERT INTO mcp_tokens
             (id, tenant_id, issued_by, label, token_prefix, token_hash,
-             scope, mode, max_docs, max_bytes, expires_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             scope, mode, max_docs, max_bytes, expires_at, oauth_client_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id, label, scope, mode, max_docs, max_bytes,
-                  created_at, expires_at, last_used_at, revoked_at
+                  created_at, expires_at, last_used_at, revoked_at,
+                  -- origin column is for the list_tokens join; the
+                  -- post-insert row is never re-serialized through
+                  -- list, so populating it here would cost a needless
+                  -- JOIN. Keep NULL.
+                  NULL::text AS origin
         "#,
     )
     .bind(&id)
@@ -228,6 +249,7 @@ async fn insert_token(
     .bind(input.max_docs)
     .bind(input.max_bytes)
     .bind(expires_at)
+    .bind(input.oauth_client_id)
     .fetch_one(db)
     .await?;
 

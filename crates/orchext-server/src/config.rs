@@ -36,6 +36,13 @@ pub struct Config {
     pub cors_allow_origins: Vec<String>,
     /// `self_hosted` (default) or `saas`. See `DeploymentMode`.
     pub deployment_mode: DeploymentMode,
+    /// Canonical externally-reachable base URL of the deployment, e.g.
+    /// `https://app.orchext.ai`. Used to populate OAuth discovery
+    /// metadata (RFC 8414 / RFC 9728) and the connector wizard's copy
+    /// fields. `None` means derive from request headers — fine for
+    /// dev / single-host self-hosting; SaaS production sets this
+    /// explicitly via `ORCHEXT_BASE_URL`.
+    pub base_url: Option<String>,
 }
 
 impl Config {
@@ -71,6 +78,11 @@ impl Config {
             }
         };
 
+        let base_url = env::var("ORCHEXT_BASE_URL")
+            .ok()
+            .map(|s| s.trim().trim_end_matches('/').to_string())
+            .filter(|s| !s.is_empty());
+
         Ok(Config {
             database_url,
             bind,
@@ -78,6 +90,7 @@ impl Config {
             secure_cookies,
             cors_allow_origins,
             deployment_mode,
+            base_url,
         })
     }
 }

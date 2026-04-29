@@ -33,6 +33,20 @@ export function LoginView({
       // Server issues an HttpOnly session cookie + a readable CSRF
       // cookie in the same response — nothing for us to persist
       // client-side beyond the display profile.
+      //
+      // If we landed here from a server-issued 302 (e.g. provider
+      // redirect → GET /v1/oauth/authorize → 302 /login?next=…), we
+      // bounce back to the original URL after auth so the consent
+      // screen renders. Same-origin paths only — no protocol-relative
+      // // URLs and no off-site jumps.
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+      const safeNext =
+        next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+      if (safeNext) {
+        window.location.replace(safeNext);
+        return;
+      }
       onAuthenticated({
         accountId: resp.account.id,
         email: resp.account.email,

@@ -682,3 +682,101 @@ async fn mcp_unknown_method_returns_jsonrpc_error(db: PgPool) {
     let body = read_json(resp.into_body()).await;
     assert_eq!(body["error"]["code"], -32601);
 }
+
+// ---------- SSE skeleton (3f.0) ----------
+
+fn sse_req(path: &str, bearer: Option<&str>) -> Request<Body> {
+    let mut b = Request::builder().method("GET").uri(path);
+    if let Some(t) = bearer {
+        b = b.header("authorization", format!("Bearer {t}"));
+    }
+    b.body(Body::empty()).unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn mcp_sse_no_bearer_returns_401(db: PgPool) {
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
+    let resp = app.clone().oneshot(sse_req("/v1/mcp/sse", None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    let resp = app.clone().oneshot(sse_req("/v1/mcp", None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn mcp_sse_invalid_bearer_returns_401(db: PgPool) {
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
+    let resp = app
+        .clone()
+        .oneshot(sse_req("/v1/mcp/sse", Some("ocx_completelywrongtoken_xx")))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn mcp_sse_valid_bearer_opens_event_stream(db: PgPool) {
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
+    let (sess, tid) = bootstrap(&app, "sse@example.com").await;
+    let token = issue_token(&app, &sess, &tid, "sse test", &["work"]).await;
+
+    // Both routes share one handler — assert each returns 200 with the
+    // streaming content type. Body frames aren't read because the
+    // keepalive interval (25s) would block the test.
+    for path in ["/v1/mcp", "/v1/mcp/sse"] {
+        let resp = app
+            .clone()
+            .oneshot(sse_req(path, Some(&token)))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "{path} status");
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        assert!(
+            ct.starts_with("text/event-stream"),
+            "{path} content-type was {ct:?}"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn mcp_sse_revoked_token_returns_401(db: PgPool) {
+    let app = router(AppState::new(db).with_rate_limit_auth(false));
+    let (sess, tid) = bootstrap(&app, "ssrev@example.com").await;
+    let token = issue_token(&app, &sess, &tid, "ssrev", &["work"]).await;
+
+    let list = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/t/{tid}/tokens"))
+                .header("authorization", format!("Bearer {sess}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = read_json(list.into_body()).await;
+    let token_id = body["tokens"][0]["id"].as_str().unwrap().to_string();
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/v1/t/{tid}/tokens/{token_id}"))
+                .header("authorization", format!("Bearer {sess}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(sse_req("/v1/mcp/sse", Some(&token)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}

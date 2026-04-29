@@ -15,7 +15,7 @@ name = "orchext-server"
 path = "src/main.rs"
 
 [dependencies]
-axum = { workspace = true, features = ["multipart"] }
+axum = { workspace = true, features = ["multipart", "form"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tower_governor = { workspace = true }
@@ -23,6 +23,9 @@ sqlx = { workspace = true }
 uuid = { workspace = true }
 
 tokio = { workspace = true, features = ["signal"] }
+tokio-stream = { version = "0.1", default-features = false }
+url = { workspace = true }
+serde_urlencoded = "0.7"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

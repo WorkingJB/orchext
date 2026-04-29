@@ -55,22 +55,30 @@ through a shared shell history or dotfile much less likely.
 
 ### 2.2 HTTP+SSE endpoint
 
-For remote use, the relay exposes:
+For remote use, the server exposes:
 
 ```
-POST  https://relay.orchext.app/v1/mcp            (JSON-RPC requests)
-GET   https://relay.orchext.app/v1/mcp/events     (SSE stream)
+POST  https://app.orchext.ai/v1/mcp        (JSON-RPC requests)
+POST  https://app.orchext.ai/v1/mcp/sse    (alias of the above)
+GET   https://app.orchext.ai/v1/mcp        (text/event-stream channel)
+GET   https://app.orchext.ai/v1/mcp/sse    (alias of the above)
 ```
 
-Both require:
+The `/sse` paths are second mounts of the same handler pair — they
+exist because ChatGPT's *Add custom MCP server* form hard-codes that
+suffix on server URLs. Claude/Copilot accept either shape. Self-
+hosters can paste whichever path their provider expects.
 
-- `Authorization: Bearer <token>`
-- `Orchext-Vault-Id: <vault-uuid>`
-- TLS 1.3.
+All four require:
 
-The relay never has plaintext access to vault contents. It only
-routes an authenticated JSON-RPC stream between the agent and the
-user's desktop app (or their self-hosted instance).
+- `Authorization: Bearer <token>` (from `/v1/oauth/token`)
+- TLS 1.3 in production.
+
+The GET channel is the streamable-HTTP server-initiated stream. As of
+3f.0 it authenticates the bearer and then sits with periodic
+`:keepalive` comments — no `notifications/*` events are emitted yet.
+3f.0b lights up `notifications/resources/updated` once a provider's
+MCP client actually consumes them.
 
 ---
 
